@@ -1,3 +1,22 @@
+// --- 1. ロジックの分離：設定コード ---
+const SYSTEM_CONFIG = {
+    CAT_LABELS: {
+        core: '共通', adv: '専攻', rel: '関連', 
+        'other-adv': '他専攻', 'other-rel': '他関連', 
+        prac: '演習', res: '研究', manual: '手動'
+    },
+    REQ_LIMITS: {
+        TOTAL_ADV_REQ: 16,
+        CORE_MIN: 4,
+        MAJOR_MIN: 8,
+        REL_MIN: 4,
+        PRAC_MIN: 6,
+        RES_MIN: 8,
+        OTHER_ADV_LIMIT: 4,
+        OTHER_REL_LIMIT: 2
+    }
+};
+
 let appState = { activeTab: 'm1z', m1z: {}, m1k: {}, m2z: {}, m2k: {} };
 let activeId = null;
 let pendingCourse = null;
@@ -5,29 +24,30 @@ let editingIndex = -1;
 
 const termLabels = {m1z:"M1前期", m1k:"M1後期", m2z:"M2前期", m2k:"M2後期"};
 
-// 1. data.js をキャッシュ破棄しつつ読み込む
+// --- 2. 離脱防止ロジック (LocalStorage廃止に伴う対応) ---
+window.addEventListener('beforeunload', (event) => {
+    // データが入力されている可能性があるため、リロード・離脱時に確認を出す
+    event.preventDefault();
+    event.returnValue = ''; 
+});
+
+// --- 3. 外部データ読み込み ---
 function loadDataScript() {
     return new Promise((resolve, reject) => {
         const script = document.createElement('script');
         const now = new Date();
         const cacheKey = `${now.getFullYear()}${now.getMonth() + 1}${now.getDate()}${now.getHours()}`;
-        
         script.src = `data.js?v=${cacheKey}`;
-        script.onload = () => {
-            console.log("Data loaded with version:", cacheKey);
-            resolve();
-        };
+        script.onload = () => resolve();
         script.onerror = () => reject(new Error("data.js not found"));
         document.head.appendChild(script);
     });
 }
 
-// 2. 初期化フローの統合
 window.onload = async () => {
     try {
         await loadDataScript();
         
-        // イベントリスナーの登録（HTMLから onchange を外した代わりにここで設定）
         document.getElementById('my-course-select')?.addEventListener('change', refresh);
         document.getElementById('catalog-course-select')?.addEventListener('change', loadCatalog);
         document.getElementById('sel-term')?.addEventListener('change', updateSelectorButtons);
@@ -37,7 +57,6 @@ window.onload = async () => {
         init();
     } catch (error) {
         alert("システムの初期化に失敗しました。data.jsが配置されているか確認してください。");
-        console.error(error);
     }
 };
 
@@ -58,7 +77,28 @@ function init() {
             } grid.innerHTML += row + `</tr>`;
         }
     }
-    refresh(); // 最初に一度描画。refresh() 内で loadCatalog() を呼ぶためここでは init だけでOK
+    refresh(); 
+}
+
+// 動的カテゴリ判定
+function getDynamicCategory(courseName, myMajorId) {
+    if (courseName.includes("演習")) return 'prac';
+    if (courseName === "情報科学特別研究") return 'res';
+    if (typeof coreCourses !== 'undefined' && coreCourses.some(c => c.name === courseName)) return 'core';
+    
+    if (typeof majorMasters !== 'undefined') {
+        const myMaster = majorMasters[myMajorId];
+        if (myMaster) {
+            if (myMaster.adv.some(c => c.name === courseName)) return 'adv';
+            if (myMaster.rel.some(c => c.name === courseName)) return 'rel';
+        }
+        for (const mId in majorMasters) {
+            if (mId === myMajorId) continue;
+            if (majorMasters[mId].adv.some(c => c.name === courseName)) return 'other-adv';
+            if (majorMasters[mId].rel.some(c => c.name === courseName)) return 'other-rel';
+        }
+    }
+    return 'manual';
 }
 
 function loadCatalog() {
@@ -78,7 +118,6 @@ function loadCatalog() {
     if (typeof coreCourses !== 'undefined') {
         coreCourses.forEach(c => createDefinedItem(c, 'core', lists.core, registeredNames));
     }
-    
     if (typeof majorMasters !== 'undefined' && majorMasters[catCourseId]) {
         const master = majorMasters[catCourseId];
         master.adv.forEach(c => createDefinedItem(c, 'adv', lists.adv, registeredNames));
@@ -99,18 +138,7 @@ function createDefinedItem(c, type, container, registeredNames) {
     div.innerHTML = `${c.name} <br><span style="font-size:0.65rem; color:#95a5a6;">[${c.schedule}]</span>`;
     div.onclick = () => {
         const myCourseId = document.getElementById('my-course-select').value;
-        const myMaster = majorMasters[myCourseId];
-        const isMyAdv = myMaster?.adv.some(m => m.name === c.name);
-        const isMyRel = myMaster?.rel.some(m => m.name === c.name);
-        
-        let detectedCat = 'other-adv';
-        if(type === 'core') detectedCat = 'core';
-        else if(type === 'prac') detectedCat = 'prac';
-        else if(type === 'res') detectedCat = 'res';
-        else if(isMyAdv) detectedCat = 'adv';
-        else if(isMyRel) detectedCat = 'rel';
-        else if(type === 'rel') detectedCat = 'other-rel';
-        
+        const detectedCat = getDynamicCategory(c.name, myCourseId);
         pendingCourse = { ...c, cat: detectedCat };
         document.getElementById('selected-course-name').innerText = c.name;
         
@@ -132,13 +160,12 @@ function createDefinedItem(c, type, container, registeredNames) {
         });
 
         const selectors = document.getElementById('day-period-selectors');
-        const daySel = document.getElementById('sel-day');
-        const perSel = document.getElementById('sel-period');
-        
         if (c.name === "情報科学特別研究" || c.isIntensive || c.isOther) {
             selectors.style.display = 'none';
         } else {
             selectors.style.display = 'block';
+            const daySel = document.getElementById('sel-day');
+            const perSel = document.getElementById('sel-period');
             daySel.disabled = false; perSel.disabled = false;
             if (c.day) {
                 daySel.value = c.day; perSel.value = c.period;
@@ -163,11 +190,10 @@ function updateSelectorButtons() {
 
 function confirmSelector(overwrite) {
     const term = document.getElementById('sel-term').value;
-    let id = "";
-    if (pendingCourse.name === "情報科学特別研究") id = 'c-research';
-    else if (pendingCourse.isIntensive) id = 'c-intensive';
-    else if (pendingCourse.isOther) id = 'c-other';
-    else id = `c-${document.getElementById('sel-day').value}-${document.getElementById('sel-period').value}`;
+    let id = (pendingCourse.name === "情報科学特別研究") ? 'c-research' :
+             (pendingCourse.isIntensive) ? 'c-intensive' :
+             (pendingCourse.isOther) ? 'c-other' :
+             `c-${document.getElementById('sel-day').value}-${document.getElementById('sel-period').value}`;
     
     const data = { name: pendingCourse.name, cat: pendingCourse.cat, unit: 2 };
     if (overwrite) appState[term][id] = [data];
@@ -175,7 +201,7 @@ function confirmSelector(overwrite) {
         if (!appState[term][id]) appState[term][id] = [];
         appState[term][id].push(data);
     }
-    if (id === 'c-research') ['m1z','m1k','m2z','m2k'].forEach(t => appState[t][id] = [data]);
+    if (id === 'c-research') ['m1z', 'm1k', 'm2z', 'm2k'].forEach(t => appState[t][id] = [data]);
     
     switchTab(term);
     document.getElementById('selector-dialog').close();
@@ -230,7 +256,7 @@ function editLecture(idx) {
 
 function deleteLecture(idx) {
     appState[appState.activeTab][activeId].splice(idx, 1);
-    if (activeId === 'c-research') ['m1z','m1k','m2z','m2k'].forEach(t => appState[t][activeId] = []);
+    if (activeId === 'c-research') ['m1z', 'm1k', 'm2z', 'm2k'].forEach(t => appState[t][activeId] = []);
     renderEditList(); 
     refresh();
 }
@@ -248,38 +274,52 @@ function updateCell() {
     if (!appState[appState.activeTab][activeId]) appState[appState.activeTab][activeId] = [];
     if (editingIndex > -1) appState[appState.activeTab][activeId][editingIndex] = data;
     else appState[appState.activeTab][activeId].push(data);
-    if (activeId === 'c-research') ['m1z','m1k','m2z','m2k'].forEach(t => appState[t][activeId] = [data]);
+    if (activeId === 'c-research') ['m1z', 'm1k', 'm2z', 'm2k'].forEach(t => appState[t][activeId] = [data]);
     refresh(); closeEditor();
 }
 
 function refresh() {
     const currentData = appState[appState.activeTab];
-    const catMap = {core:'共通', adv:'専攻', rel:'関連', 'other-adv':'他専攻', 'other-rel':'他関連', prac:'演習', res:'研究'};
+    const myMajorId = document.getElementById('my-course-select').value;
     
-    // 描画処理
     document.querySelectorAll('.cell').forEach(td => {
         const arr = currentData[td.id] || [];
-        td.innerHTML = arr.map(v => `
-            <div class="lecture-tile">
-                <div style="font-weight:bold;">${v.name}</div>
-                <span class="cat-tag ${v.cat.includes('other') ? 'tag-other' : `tag-${v.cat}`}">${catMap[v.cat]}</span>
-            </div>
-        `).join('');
+        td.innerHTML = arr.map(v => {
+            const dynamicCat = getDynamicCategory(v.name, myMajorId);
+            const tagClass = dynamicCat.includes('other') ? 'tag-other' : `tag-${dynamicCat}`;
+            return `
+                <div class="lecture-tile">
+                    <div style="font-weight:bold;">${v.name}</div>
+                    <span class="cat-tag ${tagClass}">${SYSTEM_CONFIG.CAT_LABELS[dynamicCat]}</span>
+                </div>
+            `;
+        }).join('');
     });
     
     ['intensive', 'research', 'other'].forEach(key => {
         const arr = currentData[`c-${key}`] || [];
         const target = document.getElementById(`${key}-content`);
-        if(target) target.innerHTML = arr.length > 0 ? arr.map(v => `<b>${v.name}</b>`).join('<br>') : "追加";
+        if(target) {
+            target.innerHTML = arr.length > 0 ? arr.map(v => {
+                const dynamicCat = getDynamicCategory(v.name, myMajorId);
+                const tagClass = dynamicCat.includes('other') ? 'tag-other' : `tag-${dynamicCat}`;
+                return `
+                    <div style="margin-bottom:4px;">
+                        <b>${v.name}</b> 
+                        <span class="cat-tag ${tagClass}" style="font-size:0.55rem; padding:1px 3px;">${SYSTEM_CONFIG.CAT_LABELS[dynamicCat]}</span>
+                    </div>
+                `;
+            }).join('') : "追加";
+        }
     });
 
-    // 計算とカタログ更新
     calculateAndNotify();
-    loadCatalog(); // 無限ループを避けるため、最後にカタログのみ更新
+    loadCatalog(); 
 }
 
 function calculateAndNotify() {
-    let s = { core: 0, adv: 0, rel: 0, otheradv: 0, otherrel: 0, prac: 0, res: 0 };
+    const myMajorId = document.getElementById('my-course-select').value;
+    let s = { core: 0, adv: 0, rel: 0, otheradv: 0, otherrel: 0, prac: 0, res: 0, manual: 0 };
     const msgs = [];
     const allCourseNames = [];
     
@@ -291,20 +331,23 @@ function calculateAndNotify() {
                 msgs.push(`<div class="msg-item">${termLabels[t]}の${['','月','火','水','木','金'][info[0]]}曜${info[1]}限に重複があります。</div>`);
             }
             arr.forEach(v => {
-                const k = v.cat.replace('-',''); if(s.hasOwnProperty(k)) s[k] += v.unit;
+                const dynamicCat = getDynamicCategory(v.name, myMajorId);
+                const k = dynamicCat.replace('-',''); 
+                if(s.hasOwnProperty(k)) s[k] += v.unit;
                 allCourseNames.push({name: v.name, term: t});
             });
         });
     });
 
-    const tAdv = Math.min(s.otheradv, 4), tRel = Math.min(s.otherrel, 2);
+    const L = SYSTEM_CONFIG.REQ_LIMITS;
+    const tAdv = Math.min(s.otheradv, L.OTHER_ADV_LIMIT), tRel = Math.min(s.otherrel, L.OTHER_REL_LIMIT);
     const items = [
-        { n: `専門科目 合計 (16)`, v: s.core + s.adv + tAdv, r: 16 },
-        { n: ` └ 共通 (4)`, v: s.core, r: 4 },
-        { n: ` └ 専攻 (8)`, v: s.adv + tAdv, r: 8, extra: `(内、他専攻振替: ${tAdv}/4)` },
-        { n: `関連科目 (4)`, v: s.rel + tRel, r: 4, extra: `(内、他コース振替: ${tRel}/2)` },
-        { n: `情報科学演習 (6)`, v: s.prac, r: 6 },
-        { n: `情報科学特別研究 (8)`, v: s.res, r: 8 }
+        { n: `専門科目 合計 (${L.TOTAL_ADV_REQ})`, v: s.core + s.adv + tAdv, r: L.TOTAL_ADV_REQ },
+        { n: ` └ 共通 (${L.CORE_MIN})`, v: s.core, r: L.CORE_MIN },
+        { n: ` └ 専攻 (${L.MAJOR_MIN})`, v: s.adv + tAdv, r: L.MAJOR_MIN, extra: `(内、他専攻振替: ${tAdv}/${L.OTHER_ADV_LIMIT})` },
+        { n: `関連科目 (${L.REL_MIN})`, v: s.rel + tRel, r: L.REL_MIN, extra: `(内、他コース振替: ${tRel}/${L.OTHER_REL_LIMIT})` },
+        { n: `情報科学演習 (${L.PRAC_MIN})`, v: s.prac, r: L.PRAC_MIN },
+        { n: `情報科学特別研究 (${L.RES_MIN})`, v: s.res, r: L.RES_MIN }
     ];
 
     const statsContainer = document.getElementById('stats-container');
@@ -338,11 +381,60 @@ function exportData() {
 
 function importData(event) {
     const reader = new FileReader();
+    const file = event.target.files[0];
+    if (!file) return;
+
     reader.onload = (e) => {
-        const data = JSON.parse(e.target.result);
-        appState = data.state; document.getElementById('my-course-select').value = data.myCourse; 
-        refresh();
-    }; reader.readAsText(event.target.files[0]);
+        try {
+            const data = JSON.parse(e.target.result);
+            
+            // 1. 構造の基本バリデーション
+            if (!data.state || !data.state.m1z || !data.state.m2k) {
+                throw new Error("Invalid structure");
+            }
+
+            // --- 2. カタログ整合性チェックの追加 ---
+            const myMajorId = data.myCourse || document.getElementById('my-course-select').value;
+            const missingCourses = [];
+            
+            // 全学期を走査して、現在のカタログで「manual(未定義)」になる講義を探す
+            ['m1z','m1k','m2z','m2k'].forEach(t => {
+                Object.values(data.state[t]).forEach(lectureArray => {
+                    lectureArray.forEach(v => {
+                        // getDynamicCategoryで判定し、手動入力(manual)扱いのものはカタログに存在しないとみなす
+                        const cat = getDynamicCategory(v.name, myMajorId);
+                        if (cat === 'manual') {
+                            missingCourses.push(v.name);
+                        }
+                    });
+                });
+            });
+
+            // 3. データの適用
+            appState = data.state; 
+            if (document.getElementById('my-course-select') && data.myCourse) {
+                document.getElementById('my-course-select').value = data.myCourse;
+            }
+            
+            refresh();
+
+            // 4. 未知の講義があった場合の通知
+            if (missingCourses.length > 0) {
+                // 重複を除去して表示
+                const uniqueMissing = [...new Set(missingCourses)];
+                alert(`【注意】読み込んだデータのうち、以下の講義は現在のカタログに見つかりませんでした。\n\n・${uniqueMissing.join('\n・')}\n\n先に「カタログ拡張」を行うか、手動でカテゴリを修正してください。`);
+            } else {
+                alert("データを正常にインポートしました。");
+            }
+
+        } catch (err) {
+            console.error("Import Error:", err);
+            alert("エラー: 選択されたファイルは有効なプランデータではありません。");
+        } finally {
+            event.target.value = ""; 
+        }
+    };
+    reader.readAsText(file);
 }
 
 function importCatalogDiff(event) {
@@ -352,6 +444,12 @@ function importCatalogDiff(event) {
     reader.onload = (e) => {
         try {
             const diffData = JSON.parse(e.target.result);
+            
+            // --- 修正：カタログ拡張データかどうかのバリデーション ---
+            if (!diffData.coreCourses && !diffData.majorMasters) {
+                throw new Error("Invalid catalog structure");
+            }
+
             if (diffData.coreCourses) {
                 diffData.coreCourses.forEach(newCourse => {
                     const idx = coreCourses.findIndex(c => c.name === newCourse.name);
@@ -376,7 +474,9 @@ function importCatalogDiff(event) {
             alert("カタログ情報を更新しました。");
             refresh();
         } catch (err) {
-            alert("エラー: JSON形式が不正です。");
+            // エラー時（構造が違う、またはJSONとして不正）
+            console.error("Catalog Import Error:", err);
+            alert("エラー: 選択されたファイルは有効なカタログ拡張データではありません。");
         }
         event.target.value = "";
     };
