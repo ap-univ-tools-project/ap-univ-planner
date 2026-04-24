@@ -48,7 +48,16 @@ window.onload = async () => {
     try {
         await loadDataScript();
         
-        document.getElementById('my-course-select')?.addEventListener('change', refresh);
+        // 所属コース変更時に、カタログ表示も連動させる処理を追加
+        document.getElementById('my-course-select')?.addEventListener('change', () => {
+            const myCourseId = document.getElementById('my-course-select').value;
+            const catalogSelect = document.getElementById('catalog-course-select');
+            if (catalogSelect) {
+                catalogSelect.value = myCourseId; // カタログのセレクトボックスを同期
+            }
+            refresh();
+        });
+
         document.getElementById('catalog-course-select')?.addEventListener('change', loadCatalog);
         document.getElementById('sel-term')?.addEventListener('change', updateSelectorButtons);
         document.getElementById('sel-day')?.addEventListener('change', updateSelectorButtons);
