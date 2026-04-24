@@ -107,33 +107,84 @@ function getDynamicCategory(courseName, myMajorId) {
     return 'manual';
 }
 
+// スコア算出関数はそのまま維持
+function getScheduleScore(c) {
+    if (c.isIntensive) return 900;
+    if (c.isOther) return 950;
+    if (!c.day || !c.period) return 1000;
+    const semScore = (c.sem === 'k') ? 100 : 0;
+    return semScore + (c.day * 10) + c.period;
+}
+
 function loadCatalog() {
     const catalogSelect = document.getElementById('catalog-course-select');
-    if (!catalogSelect) return;
+    const searchInput = document.getElementById('catalog-search')?.value.toLowerCase() || "";
+    const filterCat = document.getElementById('catalog-filter-cat')?.value || "all";
+    const filterTime = document.getElementById('catalog-filter-time')?.value || "all";
+    const sortType = document.getElementById('catalog-sort')?.value || "default";
+
+    const listAll = document.getElementById('list-all');
+    if (!catalogSelect || !listAll) return;
     
+    listAll.innerHTML = '';
     const catCourseId = catalogSelect.value;
-    const lists = { core: document.getElementById('list-core'), adv: document.getElementById('list-adv'), rel: document.getElementById('list-rel'), prac: document.getElementById('list-prac'), res: document.getElementById('list-res') };
+
+    // 全データを一つの配列に集約
+    let allData = [];
+
+    if (typeof coreCourses !== 'undefined') {
+        allData = allData.concat(coreCourses.map(c => ({...c, type: 'core'})));
+    }
+    if (typeof majorMasters !== 'undefined' && majorMasters[catCourseId]) {
+        allData = allData.concat(majorMasters[catCourseId].adv.map(c => ({...c, type: 'adv'})));
+        allData = allData.concat(majorMasters[catCourseId].rel.map(c => ({...c, type: 'rel'})));
+    }
     
-    Object.values(lists).forEach(el => { if(el) el.innerHTML = ''; });
-    
+    const pracResData = [
+        { name: `情報科学演習1`, schedule: "M1前期のみ", sem: 'z', type: 'prac' },
+        { name: `情報科学演習2`, schedule: "M1後期のみ", sem: 'k', type: 'prac' },
+        { name: `情報科学演習3`, schedule: "M2前期のみ", sem: 'z', type: 'prac' },
+        { name: `情報科学特別研究`, schedule: "全学期共通", isOther: true, type: 'res' }
+    ];
+    allData = allData.concat(pracResData);
+
+    // 登録済み科目の取得
     const registeredNames = new Set();
     ['m1z','m1k','m2z','m2k'].forEach(t => {
         Object.values(appState[t]).forEach(arr => arr.forEach(v => registeredNames.add(v.name)));
     });
 
-    if (typeof coreCourses !== 'undefined') {
-        coreCourses.forEach(c => createDefinedItem(c, 'core', lists.core, registeredNames));
+    // フィルタリング処理（検索語・科目群・時間帯）
+    let result = allData.filter(c => {
+        const matchesSearch = c.name.toLowerCase().includes(searchInput);
+        
+        let matchesCat = true;
+        if (filterCat !== 'all') {
+            if (filterCat === 'prac') matchesCat = (c.type === 'prac' || c.type === 'res');
+            else matchesCat = (c.type === filterCat);
+        }
+
+        let matchesTime = true;
+        if (filterTime === 'z') matchesTime = (c.sem === 'z');
+        else if (filterTime === 'k') matchesTime = (c.sem === 'k');
+        else if (filterTime === 'intensive') matchesTime = c.isIntensive;
+
+        return matchesSearch && matchesCat && matchesTime;
+    });
+
+    // ソート処理（全体に対して適用）
+    if (sortType === 'name') {
+        result.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+    } else if (sortType === 'time') {
+        result.sort((a, b) => getScheduleScore(a) - getScheduleScore(b));
+    } else {
+        // デフォルト（便覧順）: core -> adv -> rel -> prac -> res の順を維持
+        const order = { core: 1, adv: 2, rel: 3, prac: 4, res: 5 };
+        result.sort((a, b) => order[a.type] - order[b.type]);
     }
-    if (typeof majorMasters !== 'undefined' && majorMasters[catCourseId]) {
-        const master = majorMasters[catCourseId];
-        master.adv.forEach(c => createDefinedItem(c, 'adv', lists.adv, registeredNames));
-        master.rel.forEach(c => createDefinedItem(c, 'rel', lists.rel, registeredNames));
-    }
-    
-    createDefinedItem({ name: `情報科学演習1`, schedule: "M1前期のみ", sem: 'z' }, 'prac', lists.prac, registeredNames);
-    createDefinedItem({ name: `情報科学演習2`, schedule: "M1後期のみ", sem: 'k' }, 'prac', lists.prac, registeredNames);
-    createDefinedItem({ name: `情報科学演習3`, schedule: "M2前期のみ", sem: 'z' }, 'prac', lists.prac, registeredNames);
-    createDefinedItem({ name: `情報科学特別研究`, schedule: "全学期共通" }, 'res', lists.res, registeredNames);
+
+    // 描画
+    result.forEach(c => createDefinedItem(c, c.type, listAll, registeredNames));
 }
 
 function createDefinedItem(c, type, container, registeredNames) {

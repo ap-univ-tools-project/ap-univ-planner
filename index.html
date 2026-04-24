@@ -34,14 +34,34 @@
                 <option value="3">システム科学専攻</option>
             </select>
         </div>
+        <div class="card" style="padding-bottom: 10px;">
+            <label class="label-sm">カタログ内検索・ソート</label>
+            <input type="text" id="catalog-search" placeholder="科目名で検索..." style="margin-bottom: 8px;" oninput="loadCatalog()">
+            <div style="display:flex; gap:5px; margin-bottom: 5px;">
+                <select id="catalog-filter-cat" onchange="loadCatalog()" style="flex:1; font-size: 0.7rem;">
+                    <option value="all">全科目群</option>
+                    <option value="core">共通のみ</option>
+                    <option value="adv">専攻のみ</option>
+                    <option value="rel">関連のみ</option>
+                    <option value="prac">演習・研究</option>
+                </select>
+                <select id="catalog-filter-time" onchange="loadCatalog()" style="flex:1; font-size: 0.7rem;">
+                    <option value="all">全時間帯</option>
+                    <option value="z">前期のみ</option>
+                    <option value="k">後期のみ</option>
+                    <option value="intensive">集中講義</option>
+                </select>
+            </div>
+            <select id="catalog-sort" onchange="loadCatalog()" style="width:100%; font-size: 0.7rem;">
+                <option value="default">便覧順</option>
+                <option value="time">開講が早い順 (全体)</option>
+                <option value="name">五十音順 (全体)</option>
+            </select>
+        </div>
         <div class="card">
             <h2>3. 講義カタログ</h2>
             <div class="catalog-scroll" id="catalog">
-                <div id="list-core"></div>
-                <div id="list-adv"></div>
-                <div id="list-rel"></div>
-                <div id="list-prac"></div>
-                <div id="list-res"></div>
+                <div id="list-all"></div>
             </div>
         </div>
     </aside>
