@@ -172,49 +172,64 @@
 
 <dialog id="selector-dialog">
     <h3 style="font-size:0.9rem; margin-top:0;">登録先の指定</h3>
-    <p id="selected-course-name" style="font-weight:bold; color:var(--accent); font-size:0.8rem;"></p>
-    <label class="label-sm">年次・学期</label>
-    <select id="sel-term"></select>
+    <p id="selected-course-name" style="font-weight:bold; color:var(--accent); font-size:0.8rem; margin-bottom:5px;"></p>
+    <label class="label-sm" style="margin-top:10px;">年次・学期</label>
+    <select id="sel-term" onchange="updateSelectorButtons()"></select>
+    
     <div id="day-period-selectors">
         <label class="label-sm" style="margin-top:10px;">曜日</label>
-        <select id="sel-day">
+        <select id="sel-day" onchange="updateSelectorButtons()">
             <option value="1">月曜日</option><option value="2">火曜日</option><option value="3">水曜日</option><option value="4">木曜日</option><option value="5">金曜日</option>
         </select>
         <label class="label-sm" style="margin-top:10px;">時限</label>
-        <select id="sel-period">
+        <select id="sel-period" onchange="updateSelectorButtons()">
             <option value="1">1限</option><option value="2">2限</option><option value="3">3限</option><option value="4">4限</option><option value="5">5限</option><option value="6">6限</option>
         </select>
     </div>
+    
     <div style="display:flex; gap:10px; margin-top:20px;">
-        <button id="btn-confirm-add" onclick="confirmSelector(false)" style="flex:2; padding:10px; background:var(--accent); color:white; border:none; border-radius:5px; cursor:pointer; font-weight:bold;">登録</button>
-        <button id="btn-confirm-overwrite" onclick="confirmSelector(true)" style="flex:2; padding:10px; background:var(--danger); color:white; border:none; border-radius:5px; cursor:pointer; font-weight:bold; display:none;">上書き</button>
-        <button onclick="document.getElementById('selector-dialog').close()" style="flex:1; padding:10px; background:#eee; border:none; border-radius:5px; cursor:pointer;">終了</button>
+        <button id="btn-confirm-add" onclick="confirmSelector()" style="flex:2; padding:10px; background:var(--accent); color:white; border:none; border-radius:5px; cursor:pointer; font-weight:bold;">登録</button>
+        <button onclick="document.getElementById('selector-dialog').close()" style="flex:1; padding:10px; background:#eee; border:none; border-radius:5px; cursor:pointer;">キャンセル</button>
     </div>
 </dialog>
 
-<div id="editor">
-    <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-        <span id="edit-pos" style="font-weight:bold; color:var(--accent); font-size:0.8rem;">編集</span>
-        <span style="font-size:0.7rem; color:#ccc; cursor:pointer;" onclick="closeEditor()">[閉じる]</span>
+<div id="editor" style="padding-top: 10px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
+        <div style="display:flex; flex-direction:column;">
+            <span style="font-size:0.6rem; color:#95a5a6; font-weight:bold; letter-spacing:0.1em;">LECTURE EDITOR</span>
+            <span id="edit-pos" style="font-weight:bold; color:var(--accent); font-size:1rem;">編集</span>
+        </div>
+        <button onclick="closeEditor()" style="width:80px; height:35px; background:#f1f2f6; border:1px solid #dcdde1; border-radius:20px; cursor:pointer; font-weight:bold; font-size:0.75rem; color:#2f3542; display:flex; align-items:center; justify-content:center; gap:4px;">
+            <span>✕</span> 閉じる
+        </button>
     </div>
+    
     <div id="lecture-edit-list"></div>
     <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
-    <label class="label-sm">新規追加・編集</label>
-    <input type="text" id="in-name" placeholder="講義名">
-    <div style="display:flex; gap:5px; margin-top:5px;">
-        <select id="in-cat" style="flex:2">
-            <option value="core">専門共通</option>
-            <option value="adv">専門専攻 (自)</option>
-            <option value="rel">関連科目 (自)</option>
-            <option value="other-adv">専門専攻 (他)</option>
-            <option value="other-rel">関連科目 (他)</option>
-            <option value="prac">演習科目</option>
-            <option value="res">特別研究</option>
-        </select>
-        <select id="in-unit" style="flex:1"><option value="1">1</option><option value="2" selected>2</option><option value="4">4</option></select>
-    </div>
-    <div style="display:flex; gap:8px; margin-top:10px;">
-        <button onclick="updateCell()" style="flex:1; padding:10px; background:var(--accent); color:#fff; border:none; border-radius:5px; font-weight:bold; cursor:pointer;">保存</button>
+    
+    <div style="background:#f8f9fa; padding:12px; border-radius:8px; border:1px solid #edf0f2;">
+        <label class="label-sm" style="color:var(--primary); margin-bottom:8px; display:flex; align-items:center; gap:5px;">
+            <span style="width:4px; height:12px; background:var(--accent); display:inline-block;"></span>
+            手動で講義を追加・編集
+        </label>
+        <input type="text" id="in-name" placeholder="講義名を入力" style="margin-bottom:8px; border-color:#ced4da;">
+        <div style="display:flex; gap:5px; margin-bottom:12px;">
+            <select id="in-cat" style="flex:2; border-color:#ced4da;">
+                <option value="core">専門共通</option>
+                <option value="adv">専門専攻 (自)</option>
+                <option value="rel">関連科目 (自)</option>
+                <option value="other-adv">専門専攻 (他)</option>
+                <option value="other-rel">関連科目 (他)</option>
+                <option value="prac">演習科目</option>
+                <option value="res">特別研究</option>
+            </select>
+            <select id="in-unit" style="flex:1; border-color:#ced4da;">
+                <option value="1">1</option><option value="2" selected>2</option><option value="4">4</option>
+            </select>
+        </div>
+        <button onclick="updateCell()" style="width:100%; padding:12px; background:var(--accent); color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer; font-size:0.85rem; box-shadow: 0 2px 4px rgba(52, 152, 219, 0.2);">
+            この内容で時間割に反映
+        </button>
     </div>
 </div>
 

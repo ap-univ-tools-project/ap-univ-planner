@@ -107,7 +107,6 @@ function getDynamicCategory(courseName, myMajorId) {
     return 'manual';
 }
 
-// スコア算出関数はそのまま維持
 function getScheduleScore(c) {
     if (c.isIntensive) return 900;
     if (c.isOther) return 950;
@@ -129,7 +128,6 @@ function loadCatalog() {
     listAll.innerHTML = '';
     const catCourseId = catalogSelect.value;
 
-    // 全データを一つの配列に集約
     let allData = [];
 
     if (typeof coreCourses !== 'undefined') {
@@ -148,42 +146,34 @@ function loadCatalog() {
     ];
     allData = allData.concat(pracResData);
 
-    // 登録済み科目の取得
     const registeredNames = new Set();
     ['m1z','m1k','m2z','m2k'].forEach(t => {
         Object.values(appState[t]).forEach(arr => arr.forEach(v => registeredNames.add(v.name)));
     });
 
-    // フィルタリング処理（検索語・科目群・時間帯）
     let result = allData.filter(c => {
         const matchesSearch = c.name.toLowerCase().includes(searchInput);
-        
         let matchesCat = true;
         if (filterCat !== 'all') {
             if (filterCat === 'prac') matchesCat = (c.type === 'prac' || c.type === 'res');
             else matchesCat = (c.type === filterCat);
         }
-
         let matchesTime = true;
         if (filterTime === 'z') matchesTime = (c.sem === 'z');
         else if (filterTime === 'k') matchesTime = (c.sem === 'k');
         else if (filterTime === 'intensive') matchesTime = c.isIntensive;
-
         return matchesSearch && matchesCat && matchesTime;
     });
 
-    // ソート処理（全体に対して適用）
     if (sortType === 'name') {
         result.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
     } else if (sortType === 'time') {
         result.sort((a, b) => getScheduleScore(a) - getScheduleScore(b));
     } else {
-        // デフォルト（便覧順）: core -> adv -> rel -> prac -> res の順を維持
         const order = { core: 1, adv: 2, rel: 3, prac: 4, res: 5 };
         result.sort((a, b) => order[a.type] - order[b.type]);
     }
 
-    // 描画
     result.forEach(c => createDefinedItem(c, c.type, listAll, registeredNames));
 }
 
@@ -194,18 +184,19 @@ function createDefinedItem(c, type, container, registeredNames) {
     div.className = `item ${type} ${isSelected ? 'selected' : ''}`;
     div.innerHTML = `${c.name} <br><span style="font-size:0.65rem; color:#95a5a6;">[${c.schedule}]</span>`;
     div.onclick = () => {
-        // 登録済みの場合の処理（場所の表示と3択）
         if (isSelected) {
             let locations = [];
             ['m1z','m1k','m2z','m2k'].forEach(t => {
                 Object.keys(appState[t]).forEach(id => {
                     if (appState[t][id].some(v => v.name === c.name)) {
                         let locStr = termLabels[t];
-                        if (id.includes('-')) {
+                        if (id.match(/c-\d-\d/)) {
                             const parts = id.split('-');
                             locStr += ` ${['','月','火','水','木','金'][parts[1]]}曜${parts[2]}限`;
                         } else {
-                            locStr += ` (${id.replace('c-','')})`;
+                            const specialLabel = id.replace('c-','');
+                            const labelMap = {intensive: "集中", research: "特別研究", other: "その他"};
+                            locStr += ` (${labelMap[specialLabel] || specialLabel})`;
                         }
                         locations.push(locStr);
                     }
@@ -215,8 +206,7 @@ function createDefinedItem(c, type, container, registeredNames) {
             const action = prompt(`「${c.name}」は以下に登録されています：\n${locations.join('\n')}\n\n操作を選択してください：\n1: そのままにする\n2: 別の場所に移動する\n3: 削除する`, "1");
             
             if (action === "2") {
-                deleteFromAll(c.name); // 一旦削除してからセレクターを開く
-                openCourseSelector(c);
+                openCourseSelector(c, true);
             } else if (action === "3") {
                 if (confirm(`「${c.name}」を削除しますか？`)) {
                     deleteFromAll(c.name);
@@ -225,12 +215,11 @@ function createDefinedItem(c, type, container, registeredNames) {
             }
             return;
         }
-        openCourseSelector(c);
+        openCourseSelector(c, false);
     };
     container.appendChild(div);
 }
 
-// 全ての学期・セルから特定の講義名を削除するヘルパー
 function deleteFromAll(courseName) {
     ['m1z', 'm1k', 'm2z', 'm2k'].forEach(t => {
         Object.keys(appState[t]).forEach(id => {
@@ -239,23 +228,40 @@ function deleteFromAll(courseName) {
     });
 }
 
-// 講義登録・移動用のセレクターダイアログを開く共通処理
-function openCourseSelector(c) {
+function openCourseSelector(c, isMoveMode = false) {
     const myCourseId = document.getElementById('my-course-select').value;
     const detectedCat = getDynamicCategory(c.name, myCourseId);
-    pendingCourse = { ...c, cat: detectedCat };
-    document.getElementById('selected-course-name').innerText = c.name;
     
+    let fullCourseData = { ...c };
+    if (!c.day && !c.isIntensive && !c.isOther) {
+        const findIn = (arr) => arr.find(item => item.name === c.name);
+        let found = findIn(coreCourses);
+        if (!found && majorMasters[myCourseId]) {
+            found = findIn(majorMasters[myCourseId].adv) || findIn(majorMasters[myCourseId].rel);
+        }
+        if (found) fullCourseData = { ...found };
+    }
+
+    pendingCourse = { ...fullCourseData, cat: detectedCat, isMoveMode: isMoveMode };
+    document.getElementById('selected-course-name').innerText = (isMoveMode ? "【移動中】" : "") + c.name;
+    
+    // ダイアログが開く前にアラートエリアをリセット
+    const alertArea = document.getElementById('selector-overlap-alert');
+    if (alertArea) alertArea.style.display = 'none';
+
     const termSelect = document.getElementById('sel-term');
     termSelect.innerHTML = "";
-    const options = [{ val: 'm1z', text: 'M1前期', sem: 'z' },{ val: 'm1k', text: 'M1後期', sem: 'k' },{ val: 'm2z', text: 'M2前期', sem: 'z' },{ val: 'm2k', text: 'M2後期', sem: 'k' }];
+    const options = [
+        { val: 'm1z', text: 'M1前期', sem: 'z' }, { val: 'm1k', text: 'M1後期', sem: 'k' },
+        { val: 'm2z', text: 'M2前期', sem: 'z' }, { val: 'm2k', text: 'M2後期', sem: 'k' }
+    ];
     
     options.forEach(opt => {
         let disabled = false;
         if (c.name === "情報科学演習1" && opt.val !== "m1z") disabled = true;
         if (c.name === "情報科学演習2" && opt.val !== "m1k") disabled = true;
         if (c.name === "情報科学演習3" && opt.val !== "m2z") disabled = true;
-        if (c.sem && c.sem !== opt.sem) disabled = true;
+        if (fullCourseData.sem && fullCourseData.sem !== opt.sem) disabled = true;
         if (!disabled) {
             const el = document.createElement('option');
             el.value = opt.val; el.text = opt.text;
@@ -264,48 +270,98 @@ function openCourseSelector(c) {
     });
 
     const selectors = document.getElementById('day-period-selectors');
-    if (c.name === "情報科学特別研究" || c.isIntensive || c.isOther) {
+    if (fullCourseData.name === "情報科学特別研究" || fullCourseData.name.includes("特別研究") || fullCourseData.isIntensive || fullCourseData.isOther) {
         selectors.style.display = 'none';
     } else {
         selectors.style.display = 'block';
         const daySel = document.getElementById('sel-day');
         const perSel = document.getElementById('sel-period');
-        daySel.disabled = false; perSel.disabled = false;
-        if (c.day) {
-            daySel.value = c.day; perSel.value = c.period;
+        if (fullCourseData.day && fullCourseData.period) {
+            daySel.value = fullCourseData.day;
+            perSel.value = fullCourseData.period;
             daySel.disabled = true; perSel.disabled = true;
+        } else {
+            daySel.disabled = false; perSel.disabled = false;
         }
     }
+    
     updateSelectorButtons();
     document.getElementById('selector-dialog').showModal();
 }
 
+// 修正点: 集中講義(c-intensive)や特別研究(c-research)などの特殊枠では重複警告を非表示にする
 function updateSelectorButtons() {
     const term = document.getElementById('sel-term').value;
     const day = document.getElementById('sel-day').value;
-    const per = document.getElementById('sel-period').value;
-    const id = `c-${day}-${per}`;
-    const exists = (appState[term][id] && appState[term][id].length > 0);
-    document.getElementById('btn-confirm-overwrite').style.display = exists ? 'block' : 'none';
-    document.getElementById('btn-confirm-add').innerText = exists ? '共存させる' : '登録';
+    const period = document.getElementById('sel-period').value;
+    const id = `c-${day}-${period}`;
+    
+    const confirmBtn = document.getElementById('btn-confirm-add');
+    const overwriteBtn = document.getElementById('btn-confirm-overwrite');
+    
+    let alertArea = document.getElementById('selector-overlap-alert');
+    if (!alertArea) {
+        alertArea = document.createElement('div');
+        alertArea.id = 'selector-overlap-alert';
+        alertArea.style.fontSize = '0.7rem';
+        alertArea.style.marginTop = '10px';
+        alertArea.style.padding = '8px';
+        alertArea.style.borderRadius = '4px';
+        alertArea.style.background = '#fff3cd';
+        alertArea.style.color = '#856404';
+        alertArea.style.border = '1px solid #ffeeba';
+        const nameDisplay = document.getElementById('selected-course-name');
+        nameDisplay.parentNode.insertBefore(alertArea, nameDisplay.nextSibling);
+    }
+
+    // 特殊枠（集中、研究、その他）の場合は重複判定を行わない
+    const isSpecialId = pendingCourse && (pendingCourse.isIntensive || pendingCourse.isOther || pendingCourse.name.includes("特別研究"));
+    const occupiedLectures = isSpecialId ? [] : (appState[term][id] || []);
+    const isOccupied = occupiedLectures.length > 0;
+
+    if (isOccupied) {
+        const names = occupiedLectures.map(l => `「${l.name}」`).join(', ');
+        alertArea.innerHTML = `⚠️ <b>重複注意:</b> 同時刻に ${names} が既に登録されています。そのまま追加しますか？`;
+        alertArea.style.display = 'block';
+    } else {
+        alertArea.style.display = 'none';
+    }
+
+    if (pendingCourse && pendingCourse.isMoveMode) {
+        confirmBtn.style.display = 'block';
+        confirmBtn.innerText = isOccupied ? "重複を承知で移動を確定" : "ここへ移動を確定する";
+        confirmBtn.style.background = isOccupied ? "var(--accent)" : "var(--success)";
+        if(overwriteBtn) overwriteBtn.style.display = 'none';
+        return;
+    }
+
+    confirmBtn.style.display = 'block';
+    confirmBtn.innerText = isOccupied ? "重複を承知で追加登録" : "登録する";
+    confirmBtn.style.background = "var(--accent)";
+    if(overwriteBtn) overwriteBtn.style.display = 'none';
 }
 
-function confirmSelector(overwrite) {
+function confirmSelector() {
+    if (!pendingCourse) return;
     const term = document.getElementById('sel-term').value;
-    let id = (pendingCourse.name === "情報科学特別研究") ? 'c-research' :
+    let id = (pendingCourse.name === "情報科学特別研究" || pendingCourse.name.includes("特別研究")) ? 'c-research' :
              (pendingCourse.isIntensive) ? 'c-intensive' :
              (pendingCourse.isOther) ? 'c-other' :
              `c-${document.getElementById('sel-day').value}-${document.getElementById('sel-period').value}`;
     
     const data = { name: pendingCourse.name, cat: pendingCourse.cat, unit: 2 };
-    if (overwrite) appState[term][id] = [data];
-    else {
-        if (!appState[term][id]) appState[term][id] = [];
-        appState[term][id].push(data);
+
+    if (pendingCourse.isMoveMode) {
+        deleteFromAll(pendingCourse.name);
     }
-    if (id === 'c-research') ['m1z', 'm1k', 'm2z', 'm2k'].forEach(t => appState[t][id] = [data]);
+
+    if (!appState[term][id]) appState[term][id] = [];
+    appState[term][id].push(data);
     
-    switchTab(term);
+    if (id === 'c-research') {
+        ['m1z', 'm1k', 'm2z', 'm2k'].forEach(t => appState[t][id] = [data]);
+    }
+    
     document.getElementById('selector-dialog').close();
     refresh();
 }
@@ -326,8 +382,141 @@ function openEditor(id, label) {
     document.getElementById('edit-pos').innerText = label;
     editingIndex = -1;
     document.getElementById('in-name').value = "";
+    
     renderEditList();
+    renderSuggestedCourses(id);
     document.getElementById('editor').style.display = 'block';
+}
+
+// 修正点: 特殊枠（集中・研究・その他）でも関連する講義をクイック登録に表示する
+function renderSuggestedCourses(cellId) {
+    document.getElementById('suggest-label')?.remove();
+    document.getElementById('suggested-courses-area')?.remove();
+    document.getElementById('suggest-divider')?.remove();
+    
+    const match = cellId.match(/c-(\d)-(\d)/);
+    const currentCatCourseId = document.getElementById('catalog-course-select').value;
+    const currentTerm = appState.activeTab.slice(-1); 
+
+    let suggestions = [];
+    
+    // 通常枠の判定
+    if (match) {
+        const targetDay = parseInt(match[1]);
+        const targetPeriod = parseInt(match[2]);
+        
+        if(typeof coreCourses !== 'undefined') {
+            coreCourses.forEach(c => {
+                if (c.day === targetDay && c.period === targetPeriod && c.sem === currentTerm) {
+                    suggestions.push({...c, type: 'core', isInternal: true});
+                }
+            });
+        }
+        if(typeof majorMasters !== 'undefined') {
+            for (const majorId in majorMasters) {
+                const isInternal = (majorId === currentCatCourseId);
+                ['adv', 'rel'].forEach(type => {
+                    majorMasters[majorId][type].forEach(c => {
+                        if (c.day === targetDay && c.period === targetPeriod && c.sem === currentTerm) {
+                            if (!suggestions.some(s => s.name === c.name)) {
+                                suggestions.push({...c, type, isInternal});
+                            }
+                        }
+                    });
+                });
+            }
+        }
+    } 
+    // 特殊枠（集中・特別研究・その他）の判定
+    else {
+        const isIntensiveSlot = cellId.includes('intensive');
+        const isResearchSlot = cellId.includes('research');
+        const isOtherSlot = cellId.includes('other');
+
+        if (isResearchSlot) {
+            suggestions.push({ name: "情報科学特別研究", type: "res", isInternal: true });
+        } else if (isIntensiveSlot || isOtherSlot) {
+            // カタログから集中講義またはその他属性を持つものを抽出
+            if(typeof coreCourses !== 'undefined') {
+                coreCourses.forEach(c => {
+                    if ((isIntensiveSlot && c.isIntensive) || (isOtherSlot && c.isOther)) {
+                        if (c.sem === currentTerm) suggestions.push({...c, type: 'core', isInternal: true});
+                    }
+                });
+            }
+            if(typeof majorMasters !== 'undefined') {
+                for (const majorId in majorMasters) {
+                    const isInternal = (majorId === currentCatCourseId);
+                    ['adv', 'rel'].forEach(type => {
+                        majorMasters[majorId][type].forEach(c => {
+                            if ((isIntensiveSlot && c.isIntensive) || (isOtherSlot && c.isOther)) {
+                                if (c.sem === currentTerm && !suggestions.some(s => s.name === c.name)) {
+                                    suggestions.push({...c, type, isInternal});
+                                }
+                            }
+                        });
+                    });
+                }
+            }
+        }
+    }
+
+    if (suggestions.length > 0) {
+        let labelText = "開講講義 (クイック登録)";
+        if (match) {
+            const dayName = ['','月','火','水','木','金'][match[1]];
+            labelText = `${dayName}曜${match[2]}限の${labelText}`;
+        }
+        const label = `<label id="suggest-label" class="label-sm" style="color:var(--accent); margin-top:10px;">${labelText}</label>`;
+        const listHtml = `
+            <div id="suggested-courses-area" class="suggested-list">
+                ${suggestions.map(s => `
+                    <div class="suggest-item ${s.type} ${!s.isInternal ? 'external-course' : ''}" onclick="quickRegister('${s.name}', '${s.type}')">
+                        <span>${!s.isInternal ? '<i class="ext-tag">他専攻</i>' : ''}${s.name}</span>
+                        <span class="cat-label">${SYSTEM_CONFIG.CAT_LABELS[s.type]}</span>
+                    </div>
+                `).join('')}
+            </div>
+            <hr id="suggest-divider" style="border:0; border-top:1px solid #eee; margin:10px 0;">
+        `;
+        
+        const hrBeforeEdit = document.querySelector('#editor hr');
+        if (hrBeforeEdit) {
+            hrBeforeEdit.insertAdjacentHTML('beforebegin', label + listHtml);
+        }
+    }
+}
+
+// 修正点: 「情報科学特別研究」などの研究科目(res)がクイック登録された場合、全学期に反映する
+function quickRegister(name, type) {
+    const myMajorId = document.getElementById('my-course-select').value;
+    const detectedCat = getDynamicCategory(name, myMajorId);
+    const data = { name: name, cat: detectedCat, unit: 2 };
+    
+    // 重複チェック
+    const isAlreadyRegistered = ['m1z','m1k','m2z','m2k'].some(t => 
+        Object.values(appState[t]).some(arr => arr.some(v => v.name === name))
+    );
+    
+    if (isAlreadyRegistered) {
+        alert(`「${name}」はすでに登録されています。`);
+        return;
+    }
+
+    // 特別研究(res)または名前に特別研究を含む場合の処理
+    if (type === 'res' || name.includes("特別研究")) {
+        ['m1z', 'm1k', 'm2z', 'm2k'].forEach(t => {
+            if (!appState[t]['c-research']) appState[t]['c-research'] = [];
+            appState[t]['c-research'] = [data]; // 研究枠は常に1枠のため上書き
+        });
+    } else {
+        // 通常の講義
+        if (!appState[appState.activeTab][activeId]) appState[appState.activeTab][activeId] = [];
+        appState[appState.activeTab][activeId].push(data);
+    }
+
+    refresh();
+    closeEditor();
 }
 
 function renderEditList() {
@@ -343,7 +532,6 @@ function renderEditList() {
         div.style.alignItems = "center";
         div.style.padding = "8px";
         
-        // カタログに存在する科目かどうかをチェック
         let catalogItem = null;
         if (typeof coreCourses !== 'undefined') catalogItem = coreCourses.find(c => c.name === v.name);
         if (!catalogItem && typeof majorMasters !== 'undefined') {
@@ -352,7 +540,6 @@ function renderEditList() {
                 if (catalogItem) break;
             }
         }
-        // 演習などの特殊科目対応
         if (!catalogItem && v.name.includes("演習")) {
             const n = v.name.slice(-1);
             catalogItem = { name: v.name, schedule: `M${n === '3' ? '2' : '1'}前期`, sem: n === '2' ? 'k' : 'z' };
@@ -368,17 +555,11 @@ function renderEditList() {
     });
 }
 
-// 時間割側からの移動リクエスト処理
 function handleMoveRequest(courseName, idx) {
-    // 現在の情報を取得
     const lecture = appState[appState.activeTab][activeId][idx];
-    
-    // カタログデータを擬似的に作成してセレクターに渡す
     const dummyCatalogItem = { name: lecture.name };
-    // 既存のデータを全削除してからセレクターを開く
-    deleteFromAll(courseName);
     closeEditor();
-    openCourseSelector(dummyCatalogItem);
+    openCourseSelector(dummyCatalogItem, true);
 }
 
 function editLecture(idx) {
@@ -415,7 +596,7 @@ function updateCell() {
 
 function refresh() {
     const currentData = appState[appState.activeTab];
-    const myMajorId = document.getElementById('my-course-select').value;
+    const myMajorId = document.getElementById('my-course-select')?.value || "";
     
     document.querySelectorAll('.cell').forEach(td => {
         const arr = currentData[td.id] || [];
@@ -453,7 +634,7 @@ function refresh() {
 }
 
 function calculateAndNotify() {
-    const myMajorId = document.getElementById('my-course-select').value;
+    const myMajorId = document.getElementById('my-course-select')?.value || "";
     let s = { core: 0, adv: 0, rel: 0, otheradv: 0, otherrel: 0, prac: 0, res: 0, manual: 0 };
     const msgs = [];
     const allCourseNames = [];
@@ -509,9 +690,27 @@ function calculateAndNotify() {
     if(msgSpace) msgSpace.innerHTML = msgs.length > 0 ? msgs.join('') : '<span style="color:#bdc3c7;">通知はありません</span>';
 }
 
+// 修正点: 保存ファイル名をユーザーが指定できるようにし、デフォルト名に日時を含める
 function exportData() {
-    const dataStr = JSON.stringify({ state: appState, myCourse: document.getElementById('my-course-select').value });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([dataStr])); a.download = `plan.json`; a.click();
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+    const defaultFileName = `timetable_plan_${dateStr}.json`;
+
+    // ユーザーにファイル名を確認
+    const fileName = prompt("保存するファイル名を入力してください:", defaultFileName);
+    if (fileName === null) return; // キャンセル時
+
+    const dataStr = JSON.stringify({ state: appState, myCourse: document.getElementById('my-course-select').value }, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName.endsWith('.json') ? fileName : fileName + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
 function importData(event) {
