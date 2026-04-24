@@ -146,6 +146,19 @@ function createDefinedItem(c, type, container, registeredNames) {
     div.className = `item ${type} ${isSelected ? 'selected' : ''}`;
     div.innerHTML = `${c.name} <br><span style="font-size:0.65rem; color:#95a5a6;">[${c.schedule}]</span>`;
     div.onclick = () => {
+        // 重複チェック：すでに登録済みの場合は削除確認を出す
+        if (isSelected) {
+            if (confirm(`「${c.name}」はすでに登録されています。登録を削除しますか？`)) {
+                ['m1z', 'm1k', 'm2z', 'm2k'].forEach(t => {
+                    Object.keys(appState[t]).forEach(id => {
+                        appState[t][id] = appState[t][id].filter(v => v.name !== c.name);
+                    });
+                });
+                refresh();
+            }
+            return;
+        }
+
         const myCourseId = document.getElementById('my-course-select').value;
         const detectedCat = getDynamicCategory(c.name, myCourseId);
         pendingCourse = { ...c, cat: detectedCat };
