@@ -136,46 +136,47 @@
     </aside>
 
     <div class="card full-width" style="background: #fdfdfd; border-top: 2px solid var(--border);">
-        <div class="usage-container">
-            <div class="usage-section">
-                <h3>ご利用方法</h3>
-                <ul class="usage-list">
-                    <li><b>コース設定</b>: 左上の「所属コース設定」を選択してください。修了要件の進捗計算に反映されます。</li>
-                    <li><b>講義の登録</b>: 「講義カタログ」から登録したい講義名をクリックし、ポップアップで登録先の「学期・曜日・時限」を指定して保存してください。</li>
-                    <li><b>時間割の編集</b>: 時間割内のセルをクリックすると、手動での講義名変更や削除が可能です。</li>
-                    <li><b>データの保管</b>: 本アプリはブラウザを閉じると内容がリセットされます。作業終了時は「保存(.json)」を行い、次回利用時に「読込」を行ってください。</li>
-                    <li><b>カタログの拡張</b>: 独自の講義を追加・修正したい場合は、<a href="templates/diff_template.json" download style="color: var(--accent); font-weight: bold;">こちらのテンプレート(JSON)</a>を編集し、「カタログ拡張」から読み込んでください。</li>
-                </ul>
-            </div>
-            <div class="usage-section">
-                <h3>注意事項・仕様</h3>
-                <ul class="usage-list">
-                    <li><b>重複チェック</b>: 同一時間に複数の講義を登録、または同じ講義を重複して登録すると、右下の「アラート」に警告が表示されます。</li>
-                    <li><b>振替単位の計算</b>: 他専攻・他コース科目の単位振替（上限あり）は、修了要件進捗に自動で計算・反映されます。</li>
-                    <li><b>最新情報の確認</b>: 画面右上に表示されている<b>「Data: YYYY-MM-DD」</b>がベースデータの最終更新日です。最新の開講状況と乖離がないか、必ず公式情報と照らし合わせてください。</li>
-                    <li><b>講義情報の修正・追加</b>: 自身の環境に合わせて特定の講義情報を書き換えたい、または不足している講義を追加したい場合は、別途用意した差分用JSONファイルを<b>「カタログ拡張」</b>ボタンから読み込んでください。</li>
-                    <li><b>特殊枠の扱い</b>: 集中講義や特別研究、所属外の科目は、時間割下部の「専用ボックス」または「その他」のカテゴリを利用して管理してください。</li>
-                </ul>
-            </div>
-            <div class="usage-section" style="grid-column: 1 / -1; border-top: 1px dashed var(--border); padding-top: 10px; margin-top: 5px;">
-                <h3 style="color: #95a5a6;">免責事項</h3>
-                <ul class="usage-list" style="color: #7f8c8d;">
-                    <li><b>非公式ツール</b>: 本アプリは個人が開発した<b>非公式ツール</b>であり、大学機関およびその関連企業とは一切関係ありません。</li>
-                    <li><b>情報の正確性</b>: 掲載されている講義情報は、公開情報をもとに個人が整理・作成したものです。最新かつ正確な情報は、必ず大学公式のシラバスや学内掲示板等で確認してください。</li>
-                    <li><b>責任の所在</b>: 本ツールの利用によって生じたいかなる不利益や損害についても、開発者は一切の責任を負いかねます。</li>
-                </ul>
-            </div>
-            <div class="usage-section" style="grid-column: 1 / -1; border-top: 1px solid var(--border); padding-top: 15px; margin-top: 15px; text-align: center;">
-                <h3 style="color: var(--accent); margin-bottom: 8px;">不具合報告・ご要望</h3>
-                <p style="font-size: 0.75rem; color: #7f8c8d; margin-bottom: 12px;">
-                    データの誤り、システムの不具合、機能追加の要望などがありましたら、以下のリンクよりお知らせください。<br>
-                    GitHub Issuesを通じて管理されており、将来の管理者へも自動的に引き継がれます。
-                </p>
-                <a href="https://github.com/ap-univ-tools-project/ap-univ-planner/issues" target="_blank" 
-                   style="display: inline-block; padding: 8px 20px; background: var(--accent); color: white; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 0.75rem;">
-                    GitHub Issues で報告・提案する
-                </a>
-            </div>
+    <div class="usage-container">
+        <div class="usage-section">
+            <h3>ご利用方法</h3>
+            <ul class="usage-list">
+                <li><b>コース設定</b>: 最初に「所属コース設定」を選択してください。一度選択すると未選択状態には戻せません。</li>
+                <li><b>カタログ検索・ソート</b>: 講義カタログ上部の検索バーでキーワード検索が可能です。また、時間順や科目群順でのソート機能を利用して、目的の講義を素早く見つけられます。</li>
+                <li><b>空きコマのハイライト</b>: カタログ設定内の「ハイライト」をONにすると、現在カタログで表示中の講義が存在する枠が色づけされます。自専攻（ベタ塗り）と他専攻（ストライプ）を直感的に判別可能です。</li>
+                <li><b>講義の登録</b>: 「講義カタログ」から登録したい講義名をクリックし、ポップアップで登録先の「学期・曜日・時限」を指定して保存してください。</li>
+                <li><b>クイック登録</b>: 時間割の空きコマをクリックし、表示されるリストから講義を選択するだけで、学期・時限を自動入力した状態で素早く登録できます。</li>
+                <li><b>データの保管</b>: 本アプリはブラウザを閉じると内容がリセットされます。作業終了時は「保存(.json)」を行い、次回利用時に「読込」を行ってください。</li>
+            </ul>
+        </div>
+        <div class="usage-section">
+            <h3>注意事項・仕様</h3>
+            <ul class="usage-list">
+                <li><b>ハイライトの優先度</b>: 同一枠内に「自専攻関連」と「他専攻関連」が混在する場合、視認性を優先して自専攻の色のみを表示します。専門科目の場合は両方の色が分割表示されます。</li>
+                <li><b>重複チェック</b>: 同一時間に複数の講義を登録、または同じ講義を重複して登録すると、右下の「アラート」に警告が表示されます。</li>
+                <li><b>振替単位の計算</b>: 他専攻・他コース科目の単位振替（上限あり）は、修了要件進捗に自動で計算・反映されます。</li>
+                <li><b>カタログの拡張</b>: 自身の環境に合わせて特定の講義情報を書き換えたい、または不足している講義を追加したい場合は、<a href="templates/diff_template.json" download style="color: var(--accent); font-weight: bold;">テンプレート(JSON)</a>を編集し、「カタログ拡張」から読み込んでください。</li>
+                <li><b>最新情報の確認</b>: 画面右上に表示されている<b>「Data: YYYY-MM-DD」</b>がベースデータの最終更新日です。最新の開講状況は必ず公式情報と照らし合わせてください。</li>
+                <li><b>特殊枠の扱い</b>: 集中講義や特別研究は、時間割下部の「専用ボックス」を利用して管理してください。</li>
+            </ul>
+        </div>
+        <div class="usage-section" style="grid-column: 1 / -1; border-top: 1px dashed var(--border); padding-top: 10px; margin-top: 5px;">
+            <h3 style="color: #95a5a6;">免責事項</h3>
+            <ul class="usage-list" style="color: #7f8c8d;">
+                <li><b>非公式ツール</b>: 本アプリは個人が開発した<b>非公式ツール</b>であり、大学機関およびその関連企業とは一切関係ありません。</li>
+                <li><b>情報の正確性</b>: 掲載されている講義情報は、公開情報をもとに個人が整理・作成したものです。最新かつ正確な情報は、必ず大学公式のシラバスや学内掲示板等で確認してください。</li>
+                <li><b>責任の所在</b>: 本ツールの利用によって生じたいかなる不利益や損害についても、開発者は一切の責任を負いかねます。</li>
+            </ul>
+        </div>
+        <div class="usage-section" style="grid-column: 1 / -1; border-top: 1px solid var(--border); padding-top: 15px; margin-top: 15px; text-align: center;">
+            <h3 style="color: var(--accent); margin-bottom: 8px;">不具合報告・ご要望</h3>
+            <p style="font-size: 0.75rem; color: #7f8c8d; margin-bottom: 12px;">
+                データの誤り、システムの不具合、機能追加の要望などがありましたら、以下のリンクよりお知らせください。<br>
+                GitHub Issuesを通じて管理されており、将来の管理者へも自動的に引き継がれます。
+            </p>
+            <a href="https://github.com/ap-univ-tools-project/ap-univ-planner/issues" target="_blank" 
+               style="display: inline-block; padding: 8px 20px; background: var(--accent); color: white; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 0.75rem;">
+                GitHub Issues で報告・提案する
+            </a>
         </div>
     </div>
 </div>
