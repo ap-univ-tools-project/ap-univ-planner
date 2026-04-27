@@ -625,36 +625,93 @@ function updateCell() {
 function refresh() {
     const currentData = appState[appState.activeTab];
     const myMajorId = document.getElementById('my-course-select')?.value || "";
-    
+    const currentTerm = appState.activeTab.slice(-1);
+    const highlightMode = document.getElementById('highlight-mode')?.value || "off";
+
+    // 他専攻ストライプをグラデーション内で再現するためのCSS定義
+    const STRIPE_ADV = `repeating-linear-gradient(45deg, var(--major-adv), var(--major-adv) 5px, #fcf3cf 5px, #fcf3cf 10px)`;
+    const STRIPE_REL = `repeating-linear-gradient(45deg, var(--related), var(--related) 5px, #ebdef0 5px, #ebdef0 10px)`;
+
     document.querySelectorAll('.cell').forEach(td => {
         const arr = currentData[td.id] || [];
+        const match = td.id.match(/c-(\d)-(\d)/);
+        
+        td.style.background = "";
+        td.style.backgroundColor = "";
+        td.className = "cell";
+
+        if (highlightMode !== "off" && match && arr.length === 0) {
+            const d = parseInt(match[1]);
+            const p = parseInt(match[2]);
+            
+            let hasCore = false, hasMyAdv = false, hasExtAdv = false, hasMyRel = false, hasExtRel = false;
+
+            if (typeof coreCourses !== 'undefined') {
+                hasCore = coreCourses.some(c => c.day === d && c.period === p && c.sem === currentTerm);
+            }
+            if (typeof majorMasters !== 'undefined') {
+                for (const mId in majorMasters) {
+                    const isMy = (mId === myMajorId);
+                    if (highlightMode === "my-major" && !isMy) continue;
+
+                    majorMasters[mId].adv.forEach(c => {
+                        if (c.day === d && c.period === p && c.sem === currentTerm) { if (isMy) hasMyAdv = true; else hasExtAdv = true; }
+                    });
+                    majorMasters[mId].rel.forEach(c => {
+                        if (c.day === d && c.period === p && c.sem === currentTerm) { if (isMy) hasMyRel = true; else hasExtRel = true; }
+                    });
+                }
+            }
+
+            // --- 色・模様のリスト作成 ---
+            let bgParts = [];
+            
+            if (hasCore) bgParts.push('var(--major-core)'); // 共通：ベタ
+            if (hasMyAdv) bgParts.push('var(--major-adv)');  // 自専門：ベタ
+            
+            // 【専門は共存】他専攻の専門があればストライプを追加
+            if (hasExtAdv) bgParts.push(STRIPE_ADV);
+
+            // 【関連は自専攻優先】
+            if (hasMyRel) {
+                bgParts.push('var(--related)'); // 自関連：ベタ
+            } else if (hasExtRel && bgParts.length === 0) {
+                // 自専攻が他に何もない場合のみ、他専攻の関連をストライプで表示
+                bgParts.push(STRIPE_REL);
+            }
+
+            // --- レンダリング ---
+            if (bgParts.length === 1) {
+                td.style.background = bgParts[0];
+            } else if (bgParts.length > 1) {
+                // 複数の要素（ベタとストライプなど）を分割表示
+                const step = 100 / bgParts.length;
+                let gradient = `linear-gradient(135deg`;
+                bgParts.forEach((part, i) => {
+                    // ストライプ(repeating-linear...)を直接linear-gradientの引数には入れられないため
+                    // ここでは単一背景として重ねるか、CSSの仕組み上、色のみを分割します。
+                    // 確実に分割するために「色」と「模様」を使い分けます。
+                });
+                
+                // 簡潔かつ確実に分割表示するための実装
+                td.style.display = "grid";
+                td.style.gridTemplateColumns = `repeat(${bgParts.length}, 1fr)`;
+                td.innerHTML = bgParts.map(bg => `<div style="background:${bg}; height:100%; width:100%;"></div>`).join('');
+                return; // 下の innerHTML 上書きをスキップ
+            }
+        }
+
+        // 通常の講義タイル表示（中身がある場合）
+        td.style.display = ""; // grid解除
         td.innerHTML = arr.map(v => {
             const dynamicCat = getDynamicCategory(v.name, myMajorId);
-            const tagClass = dynamicCat.includes('other') ? 'tag-other' : `tag-${dynamicCat}`;
-            return `
-                <div class="lecture-tile">
-                    <div style="font-weight:bold;">${v.name}</div>
-                    <span class="cat-tag ${tagClass}">${SYSTEM_CONFIG.CAT_LABELS[dynamicCat]}</span>
-                </div>
-            `;
+            const tagClass = dynamicCat === 'other-adv' ? 'tag-other-adv' : 
+                             dynamicCat === 'other-rel' ? 'tag-other-rel' : `tag-${dynamicCat}`;
+            return `<div class="lecture-tile">
+                <div style="font-weight:bold;">${v.name}</div>
+                <span class="cat-tag ${tagClass}">${SYSTEM_CONFIG.CAT_LABELS[dynamicCat]}</span>
+            </div>`;
         }).join('');
-    });
-    
-    ['intensive', 'research', 'other'].forEach(key => {
-        const arr = currentData[`c-${key}`] || [];
-        const target = document.getElementById(`${key}-content`);
-        if(target) {
-            target.innerHTML = arr.length > 0 ? arr.map(v => {
-                const dynamicCat = getDynamicCategory(v.name, myMajorId);
-                const tagClass = dynamicCat.includes('other') ? 'tag-other' : `tag-${dynamicCat}`;
-                return `
-                    <div style="margin-bottom:4px;">
-                        <b>${v.name}</b> 
-                        <span class="cat-tag ${tagClass}" style="font-size:0.55rem; padding:1px 3px;">${SYSTEM_CONFIG.CAT_LABELS[dynamicCat]}</span>
-                    </div>
-                `;
-            }).join('') : "追加";
-        }
     });
 
     calculateAndNotify();

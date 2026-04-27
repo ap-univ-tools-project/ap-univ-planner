@@ -178,6 +178,68 @@ dialog::backdrop { background: rgba(0,0,0,0.5); }
     border-radius: 10px;
 }
 
+/* ハイライト用のスタイル */
+.cell-highlight {
+    position: relative;
+    transition: background 0.3s;
+}
+/* 複数カテゴリがある場合のグラデーション（例：2色、3色） */
+.hl-split-2 { background: linear-gradient(135deg, var(--bg1) 50%, var(--bg2) 50%); }
+.hl-split-3 { background: linear-gradient(135deg, var(--bg1) 33%, var(--bg2) 33% 66%, var(--bg3) 66%); }
+
+/* 他専攻（外部）の場合は少し彩度を落とすか、点線の枠を付けるなどの区別 */
+.ext-highlight {
+    outline: 2px dashed rgba(0,0,0,0.1) !important;
+    outline-offset: -2px;
+}
+
+/* --- 時間割ハイライト＆他専攻デザインの強化 --- */
+
+/* --- 他専攻ストライプのデザイン統一 --- */
+
+/* 他専攻・専門 (adv): 黄色系のストライプ */
+.ext-stripe-adv {
+    background: repeating-linear-gradient(
+        45deg,
+        var(--major-adv),
+        var(--major-adv) 8px,
+        #fcf3cf 8px,
+        #fcf3cf 16px
+    ) !important;
+}
+
+/* 他専攻・関連 (rel): 紫系のストライプ */
+.ext-stripe-rel {
+    background: repeating-linear-gradient(
+        45deg,
+        var(--related),
+        var(--related) 8px,
+        #ebdef0 8px,
+        #ebdef0 16px
+    ) !important;
+}
+
+/* 他専攻タグの配色：グレー系から、視認性の高い「白抜き」へ変更 */
+.tag-other-adv { 
+    background-color: #7f8c8d !important; 
+    color: #ffffff !important; 
+} 
+.tag-other-rel { 
+    background-color: #95a5a6 !important; 
+    color: #ffffff !important; 
+}
+
+/* グラデーション（自専攻複数が存在する場合）の境界線をクッキリさせる */
+.hl-split-2 {
+    background: linear-gradient(135deg, var(--bg1) 50%, var(--bg2) 50%) !important;
+}
+
+/* セル内の既存講義がある場合はハイライトを無効化する保証 */
+.cell {
+    position: relative;
+    background-clip: padding-box;
+}
+
 /* --- スマホ・タブレット対応 (Responsive) --- */
 @media (max-width: 1024px) {
     .wrapper {

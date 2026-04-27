@@ -35,6 +35,14 @@
                 <option value="2">メディア情報専攻</option>
                 <option value="3">システム科学専攻</option>
             </select>
+            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #eee;">
+                <label class="label-sm" style="display:block; margin-bottom:5px;">空きコマのハイライト</label>
+                <select id="highlight-mode" onchange="refresh()" style="width:100%; font-size: 0.7rem; background: #fffbe6; border-color: #ffe58f;">
+                    <option value="off">ハイライトOFF</option>
+                    <option value="all">カタログ全科目を対象</option>
+                    <option value="my-major">所属専攻の科目のみ</option>
+                </select>
+            </div>
         </div>
         <div class="card" style="padding-bottom: 10px;">
             <label class="label-sm">カタログ内検索・ソート</label>
