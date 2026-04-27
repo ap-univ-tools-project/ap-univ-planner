@@ -47,9 +47,18 @@ window.onload = async () => {
     try {
         await loadDataScript();
         
-        document.getElementById('my-course-select')?.addEventListener('change', () => {
-            const myCourseId = document.getElementById('my-course-select').value;
+        document.getElementById('my-course-select')?.addEventListener('change', (e) => {
+            const myCourseSelect = e.target;
+            const myCourseId = myCourseSelect.value;
             const catalogSelect = document.getElementById('catalog-course-select');
+
+            // --- 追加箇所：空の選択肢を削除するロジック ---
+            // 1番目の選択肢(index 0)が値を持っていない場合、それを削除する
+            if (myCourseSelect.options[0].value === "") {
+                myCourseSelect.remove(0);
+            }
+            // ------------------------------------------
+
             if (catalogSelect) {
                 catalogSelect.value = myCourseId;
             }
@@ -130,12 +139,31 @@ function loadCatalog() {
 
     let allData = [];
 
+    // 共通科目の取得
     if (typeof coreCourses !== 'undefined') {
         allData = allData.concat(coreCourses.map(c => ({...c, type: 'core'})));
     }
-    if (typeof majorMasters !== 'undefined' && majorMasters[catCourseId]) {
-        allData = allData.concat(majorMasters[catCourseId].adv.map(c => ({...c, type: 'adv'})));
-        allData = allData.concat(majorMasters[catCourseId].rel.map(c => ({...c, type: 'rel'})));
+
+    // 専攻科目の取得
+    if (typeof majorMasters !== 'undefined') {
+        if (catCourseId === 'all') {
+            // 全専攻表示：重複を避けるためにSetで管理しながらすべての専攻を回る
+            const addedNames = new Set();
+            for (const mId in majorMasters) {
+                ['adv', 'rel'].forEach(type => {
+                    majorMasters[mId][type].forEach(c => {
+                        if (!addedNames.has(c.name)) {
+                            allData.push({...c, type: type});
+                            addedNames.add(c.name);
+                        }
+                    });
+                });
+            }
+        } else if (majorMasters[catCourseId]) {
+            // 単一専攻表示
+            allData = allData.concat(majorMasters[catCourseId].adv.map(c => ({...c, type: 'adv'})));
+            allData = allData.concat(majorMasters[catCourseId].rel.map(c => ({...c, type: 'rel'})));
+        }
     }
     
     const pracResData = [
