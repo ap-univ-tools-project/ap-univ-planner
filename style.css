@@ -240,39 +240,35 @@ dialog::backdrop { background: rgba(0,0,0,0.5); }
     background-clip: padding-box;
 }
 
-/* --- スマホ・タブレット対応 (Responsive) --- */
-@media (max-width: 1024px) {
-    .wrapper {
-        display: flex; /* PCのグリッドを解除し、順序制御を可能にする */
-        flex-direction: column;
-        padding: 10px;
-    }
+/* 所属コース未設定時：閲覧は可能だが、登録・編集対象であることを弱めて表示 */
+.item.locked {
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+.item.locked:hover {
+    border-color: var(--border);
+    background: #fff;
+}
+.course-not-selected .cell,
+.course-not-selected .special-box {
+    cursor: not-allowed;
+    opacity: 0.72;
+}
 
-    /* 要求に基づきツール名を常に最上部へ(order: 1) */
-    .main-header { order: 1; margin-bottom: 10px; }
-    
-    /* 順序：所属・カタログ(2) -> データ・通知(3) -> 時間割(4) -> 使い方(5) */
-    .wrapper > aside:nth-of-type(1) { order: 2; } 
-    .wrapper > aside:nth-of-type(2) { order: 3; }
-    .wrapper > main { order: 4; }
-    .full-width { order: 5; }
-
-    .card:has(table) {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-    table { min-width: 600px; }
-    .special-grid { grid-template-columns: 1fr 1fr; }
-    .usage-container { grid-template-columns: 1fr; }
-    #editor, dialog { width: 90%; max-width: none; }
-    
-    /* モバイル操作性の強化 */
-    select, input[type="text"], #editor button {
-        min-height: 44px;
-    }
-    #lecture-edit-list button {
-        min-width: 60px;
-        min-height: 44px;
-        font-size: 0.85rem;
-    }
+/* 特殊枠に登録済み講義を表示するための調整 */
+.special-box.has-lectures {
+    align-items: stretch;
+    justify-content: flex-start;
+    border-style: solid;
+    border-color: var(--accent);
+    background: #f8fbff;
+}
+.special-box.has-lectures > div:not(.special-label) {
+    width: 100%;
+    margin-top: 8px;
+}
+.special-box.has-lectures .lecture-tile {
+    width: 100%;
+    box-sizing: border-box;
+    text-align: left;
 }

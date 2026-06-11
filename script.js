@@ -24,6 +24,75 @@ let editingIndex = -1;
 
 const termLabels = {m1z:"M1前期", m1k:"M1後期", m2z:"M2前期", m2k:"M2後期"};
 
+
+function isCourseSelected() {
+    return !!document.getElementById('my-course-select')?.value;
+}
+
+function ensureCourseSelected(actionLabel = "この操作") {
+    if (isCourseSelected()) return true;
+    alert(`${actionLabel}を行うには、先に「所属コース設定」で専攻を選択してください。\n\n※データの読込・カタログ拡張・カタログの閲覧は、未選択のままでも利用できます。`);
+    return false;
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function getLectureTileHtml(v, myMajorId) {
+    const dynamicCat = getDynamicCategory(v.name, myMajorId);
+    const tagClass = dynamicCat === 'other-adv' ? 'tag-other-adv' :
+                     dynamicCat === 'other-rel' ? 'tag-other-rel' : `tag-${dynamicCat}`;
+    return `<div class="lecture-tile">
+        <div style="font-weight:bold;">${escapeHtml(v.name)}</div>
+        <span class="cat-tag ${tagClass}">${escapeHtml(SYSTEM_CONFIG.CAT_LABELS[dynamicCat] || dynamicCat)}</span>
+    </div>`;
+}
+
+function renderSpecialBoxes(currentData, myMajorId) {
+    const targets = [
+        { id: 'c-intensive', contentId: 'intensive-content', emptyText: '追加' },
+        { id: 'c-research', contentId: 'research-content', emptyText: '追加' },
+        { id: 'c-other', contentId: 'other-content', emptyText: '追加' }
+    ];
+
+    targets.forEach(({ id, contentId, emptyText }) => {
+        const box = document.getElementById(id);
+        const content = document.getElementById(contentId);
+        if (!box || !content) return;
+
+        const arr = currentData[id] || [];
+        box.classList.toggle('has-lectures', arr.length > 0);
+        if (arr.length === 0) {
+            content.textContent = emptyText;
+        } else {
+            content.innerHTML = arr.map(v => getLectureTileHtml(v, myMajorId)).join('');
+        }
+    });
+}
+
+function renderCourseGateStatus() {
+    const statsContainer = document.getElementById('stats-container');
+    const msgSpace = document.getElementById('msg-space');
+    if (statsContainer) {
+        statsContainer.innerHTML = `
+            <div class="stat-row">
+                <span style="font-weight:bold; color:var(--accent);">所属コース未設定</span>
+                <span style="font-size:0.72rem; color:#7f8c8d; margin-top:4px;">
+                    修了要件の計算と時間割編集は、左上の「所属コース設定」後に利用できます。
+                </span>
+            </div>`;
+    }
+    if (msgSpace) {
+        msgSpace.innerHTML = '<div class="msg-item">講義登録・時間割編集の前に、所属コースを選択してください。</div>';
+    }
+}
+
 // --- 2. 離脱防止ロジック (LocalStorage廃止に伴う対応) ---
 window.addEventListener('beforeunload', (event) => {
     event.preventDefault();
@@ -209,9 +278,12 @@ function createDefinedItem(c, type, container, registeredNames) {
     if (!container) return;
     const div = document.createElement('div');
     const isSelected = registeredNames.has(c.name);
-    div.className = `item ${type} ${isSelected ? 'selected' : ''}`;
-    div.innerHTML = `${c.name} <br><span style="font-size:0.65rem; color:#95a5a6;">[${c.schedule}]</span>`;
+    const isLocked = !isCourseSelected();
+    div.className = `item ${type} ${isSelected ? 'selected' : ''} ${isLocked ? 'locked' : ''}`;
+    div.innerHTML = `${escapeHtml(c.name)} <br><span style="font-size:0.65rem; color:#95a5a6;">[${escapeHtml(c.schedule)}]</span>`;
     div.onclick = () => {
+        if (!ensureCourseSelected('講義の登録・移動・削除')) return;
+
         if (isSelected) {
             let locations = [];
             ['m1z','m1k','m2z','m2k'].forEach(t => {
@@ -257,6 +329,7 @@ function deleteFromAll(courseName) {
 }
 
 function openCourseSelector(c, isMoveMode = false) {
+    if (!ensureCourseSelected(isMoveMode ? '講義の移動' : '講義の登録')) return;
     const myCourseId = document.getElementById('my-course-select').value;
     const detectedCat = getDynamicCategory(c.name, myCourseId);
     
@@ -348,7 +421,7 @@ function updateSelectorButtons() {
     const isOccupied = occupiedLectures.length > 0;
 
     if (isOccupied) {
-        const names = occupiedLectures.map(l => `「${l.name}」`).join(', ');
+        const names = occupiedLectures.map(l => `「${escapeHtml(l.name)}」`).join(', ');
         alertArea.innerHTML = `⚠️ <b>重複注意:</b> 同時刻に ${names} が既に登録されています。そのまま追加しますか？`;
         alertArea.style.display = 'block';
     } else {
@@ -370,6 +443,7 @@ function updateSelectorButtons() {
 }
 
 function confirmSelector() {
+    if (!ensureCourseSelected('講義の登録')) return;
     if (!pendingCourse) return;
     const term = document.getElementById('sel-term').value;
     let id = (pendingCourse.name === "情報科学特別研究" || pendingCourse.name.includes("特別研究")) ? 'c-research' :
@@ -404,6 +478,7 @@ function switchTab(tabId) {
 }
 
 function openEditor(id, label) {
+    if (!ensureCourseSelected('時間割の編集')) return;
     if(activeId) document.getElementById(activeId)?.classList.remove('active-target');
     activeId = id;
     document.getElementById(id)?.classList.add('active-target');
@@ -417,13 +492,27 @@ function openEditor(id, label) {
 }
 
 // 修正点: 特殊枠（集中・研究・その他）でも関連する講義をクイック登録に表示する
+function getPracticeCourseForActiveTab() {
+    const practiceCoursesByTab = {
+        m1z: { name: "情報科学演習1", schedule: "M1前期のみ", sem: 'z', type: 'prac', isInternal: true },
+        m1k: { name: "情報科学演習2", schedule: "M1後期のみ", sem: 'k', type: 'prac', isInternal: true },
+        m2z: { name: "情報科学演習3", schedule: "M2前期のみ", sem: 'z', type: 'prac', isInternal: true }
+    };
+    return practiceCoursesByTab[appState.activeTab] || null;
+}
+
+function addSuggestionOnce(suggestions, course) {
+    if (!course || suggestions.some(s => s.name === course.name)) return;
+    suggestions.push(course);
+}
+
 function renderSuggestedCourses(cellId) {
     document.getElementById('suggest-label')?.remove();
     document.getElementById('suggested-courses-area')?.remove();
     document.getElementById('suggest-divider')?.remove();
     
     const match = cellId.match(/c-(\d)-(\d)/);
-    const currentCatCourseId = document.getElementById('catalog-course-select').value;
+    const myMajorId = document.getElementById('my-course-select')?.value || "";
     const currentTerm = appState.activeTab.slice(-1); 
 
     let suggestions = [];
@@ -442,18 +531,20 @@ function renderSuggestedCourses(cellId) {
         }
         if(typeof majorMasters !== 'undefined') {
             for (const majorId in majorMasters) {
-                const isInternal = (majorId === currentCatCourseId);
+                const isInternal = (majorId === myMajorId);
                 ['adv', 'rel'].forEach(type => {
                     majorMasters[majorId][type].forEach(c => {
                         if (c.day === targetDay && c.period === targetPeriod && c.sem === currentTerm) {
-                            if (!suggestions.some(s => s.name === c.name)) {
-                                suggestions.push({...c, type, isInternal});
-                            }
+                            addSuggestionOnce(suggestions, {...c, type, isInternal});
                         }
                     });
                 });
             }
         }
+
+        // 情報科学演習1〜3は固定の曜日・時限を持たないため、
+        // 開講対象学期の通常セルであれば任意の枠にクイック登録できるようにする。
+        addSuggestionOnce(suggestions, getPracticeCourseForActiveTab());
     } 
     // 特殊枠（集中・特別研究・その他）の判定
     else {
@@ -474,7 +565,7 @@ function renderSuggestedCourses(cellId) {
             }
             if(typeof majorMasters !== 'undefined') {
                 for (const majorId in majorMasters) {
-                    const isInternal = (majorId === currentCatCourseId);
+                    const isInternal = (majorId === myMajorId);
                     ['adv', 'rel'].forEach(type => {
                         majorMasters[majorId][type].forEach(c => {
                             if ((isIntensiveSlot && c.isIntensive) || (isOtherSlot && c.isOther)) {
@@ -495,28 +586,57 @@ function renderSuggestedCourses(cellId) {
             const dayName = ['','月','火','水','木','金'][match[1]];
             labelText = `${dayName}曜${match[2]}限の${labelText}`;
         }
-        const label = `<label id="suggest-label" class="label-sm" style="color:var(--accent); margin-top:10px;">${labelText}</label>`;
-        const listHtml = `
-            <div id="suggested-courses-area" class="suggested-list">
-                ${suggestions.map(s => `
-                    <div class="suggest-item ${s.type} ${!s.isInternal ? 'external-course' : ''}" onclick="quickRegister('${s.name}', '${s.type}')">
-                        <span>${!s.isInternal ? '<i class="ext-tag">他専攻</i>' : ''}${s.name}</span>
-                        <span class="cat-label">${SYSTEM_CONFIG.CAT_LABELS[s.type]}</span>
-                    </div>
-                `).join('')}
-            </div>
-            <hr id="suggest-divider" style="border:0; border-top:1px solid #eee; margin:10px 0;">
-        `;
+
+        const label = document.createElement('label');
+        label.id = 'suggest-label';
+        label.className = 'label-sm';
+        label.style.color = 'var(--accent)';
+        label.style.marginTop = '10px';
+        label.textContent = labelText;
+
+        const area = document.createElement('div');
+        area.id = 'suggested-courses-area';
+        area.className = 'suggested-list';
+
+        suggestions.forEach(s => {
+            const item = document.createElement('div');
+            item.className = `suggest-item ${s.type} ${!s.isInternal ? 'external-course' : ''}`;
+            item.addEventListener('click', () => quickRegister(s.name, s.type));
+
+            const nameWrap = document.createElement('span');
+            if (!s.isInternal) {
+                const extTag = document.createElement('i');
+                extTag.className = 'ext-tag';
+                extTag.textContent = '他専攻';
+                nameWrap.appendChild(extTag);
+            }
+            nameWrap.appendChild(document.createTextNode(s.name));
+
+            const catLabel = document.createElement('span');
+            catLabel.className = 'cat-label';
+            catLabel.textContent = SYSTEM_CONFIG.CAT_LABELS[s.type] || s.type;
+
+            item.appendChild(nameWrap);
+            item.appendChild(catLabel);
+            area.appendChild(item);
+        });
+
+        const divider = document.createElement('hr');
+        divider.id = 'suggest-divider';
+        divider.style.border = '0';
+        divider.style.borderTop = '1px solid #eee';
+        divider.style.margin = '10px 0';
         
         const hrBeforeEdit = document.querySelector('#editor hr');
         if (hrBeforeEdit) {
-            hrBeforeEdit.insertAdjacentHTML('beforebegin', label + listHtml);
+            hrBeforeEdit.before(label, area, divider);
         }
     }
 }
 
 // 修正点: 「情報科学特別研究」などの研究科目(res)がクイック登録された場合、全学期に反映する
 function quickRegister(name, type) {
+    if (!ensureCourseSelected('クイック登録')) return;
     const myMajorId = document.getElementById('my-course-select').value;
     const detectedCat = getDynamicCategory(name, myMajorId);
     const data = { name: name, cat: detectedCat, unit: 2 };
@@ -569,16 +689,36 @@ function renderEditList() {
             }
         }
         if (!catalogItem && v.name.includes("演習")) {
-            const n = v.name.slice(-1);
-            catalogItem = { name: v.name, schedule: `M${n === '3' ? '2' : '1'}前期`, sem: n === '2' ? 'k' : 'z' };
+            const practiceMeta = {
+                "情報科学演習1": { schedule: "M1前期のみ", sem: 'z' },
+                "情報科学演習2": { schedule: "M1後期のみ", sem: 'k' },
+                "情報科学演習3": { schedule: "M2前期のみ", sem: 'z' }
+            };
+            catalogItem = { name: v.name, ...(practiceMeta[v.name] || { schedule: "演習科目", sem: undefined }) };
         }
 
-        div.innerHTML = `
-            <span style="font-weight:bold; font-size:0.8rem;">${v.name}</span>
-            <div style="display:flex; gap:8px;">
-                ${catalogItem ? `<button onclick="handleMoveRequest('${v.name}', ${idx})">移動</button>` : `<button onclick="editLecture(${idx})">編集</button>`}
-                <button onclick="deleteLecture(${idx})">削除</button>
-            </div>`;
+        const nameSpan = document.createElement('span');
+        nameSpan.style.fontWeight = 'bold';
+        nameSpan.style.fontSize = '0.8rem';
+        nameSpan.textContent = v.name;
+
+        const actions = document.createElement('div');
+        actions.style.display = 'flex';
+        actions.style.gap = '8px';
+
+        const primaryBtn = document.createElement('button');
+        primaryBtn.textContent = catalogItem ? '移動' : '編集';
+        primaryBtn.addEventListener('click', () => {
+            if (catalogItem) handleMoveRequest(v.name, idx);
+            else editLecture(idx);
+        });
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = '削除';
+        deleteBtn.addEventListener('click', () => deleteLecture(idx));
+
+        actions.append(primaryBtn, deleteBtn);
+        div.append(nameSpan, actions);
         list.appendChild(div);
     });
 }
@@ -612,6 +752,7 @@ function closeEditor() {
 }
 
 function updateCell() {
+    if (!ensureCourseSelected('手動での時間割編集')) return;
     const name = document.getElementById('in-name').value;
     if(!name) return;
     const data = { name, cat: document.getElementById('in-cat').value, unit: parseInt(document.getElementById('in-unit').value) };
@@ -627,6 +768,7 @@ function refresh() {
     const myMajorId = document.getElementById('my-course-select')?.value || "";
     const currentTerm = appState.activeTab.slice(-1);
     const highlightMode = document.getElementById('highlight-mode')?.value || "off";
+    document.body.classList.toggle('course-not-selected', !myMajorId);
 
     // 他専攻ストライプをグラデーション内で再現するためのCSS定義
     const STRIPE_ADV = `repeating-linear-gradient(45deg, var(--major-adv), var(--major-adv) 5px, #fcf3cf 5px, #fcf3cf 10px)`;
@@ -703,23 +845,20 @@ function refresh() {
 
         // 通常の講義タイル表示（中身がある場合）
         td.style.display = ""; // grid解除
-        td.innerHTML = arr.map(v => {
-            const dynamicCat = getDynamicCategory(v.name, myMajorId);
-            const tagClass = dynamicCat === 'other-adv' ? 'tag-other-adv' : 
-                             dynamicCat === 'other-rel' ? 'tag-other-rel' : `tag-${dynamicCat}`;
-            return `<div class="lecture-tile">
-                <div style="font-weight:bold;">${v.name}</div>
-                <span class="cat-tag ${tagClass}">${SYSTEM_CONFIG.CAT_LABELS[dynamicCat]}</span>
-            </div>`;
-        }).join('');
+        td.innerHTML = arr.map(v => getLectureTileHtml(v, myMajorId)).join('');
     });
 
+    renderSpecialBoxes(currentData, myMajorId);
     calculateAndNotify();
     loadCatalog(); 
 }
 
 function calculateAndNotify() {
     const myMajorId = document.getElementById('my-course-select')?.value || "";
+    if (!myMajorId) {
+        renderCourseGateStatus();
+        return;
+    }
     let s = { core: 0, adv: 0, rel: 0, otheradv: 0, otherrel: 0, prac: 0, res: 0, manual: 0 };
     const msgs = [];
     const allCourseNames = [];
@@ -768,7 +907,7 @@ function calculateAndNotify() {
     allCourseNames.forEach(x => { nameCounts[x.name] = (nameCounts[x.name] || 0) + 1; });
     for(let name in nameCounts) {
         if(nameCounts[name] > 1 && name !== "情報科学特別研究" && !name.includes("演習")) {
-            msgs.push(`<div class="msg-item">「${name}」が重複登録されています。</div>`);
+            msgs.push(`<div class="msg-item">「${escapeHtml(name)}」が重複登録されています。</div>`);
         }
     }
     const msgSpace = document.getElementById('msg-space');
@@ -821,7 +960,13 @@ function importData(event) {
             });
             appState = data.state; 
             if (document.getElementById('my-course-select') && data.myCourse) {
-                document.getElementById('my-course-select').value = data.myCourse;
+                const myCourseSelect = document.getElementById('my-course-select');
+                myCourseSelect.value = data.myCourse;
+                if (myCourseSelect.options[0]?.value === "") {
+                    myCourseSelect.remove(0);
+                }
+                const catalogSelect = document.getElementById('catalog-course-select');
+                if (catalogSelect) catalogSelect.value = data.myCourse;
             }
             refresh();
             if (missingCourses.length > 0) {
