@@ -240,35 +240,369 @@ dialog::backdrop { background: rgba(0,0,0,0.5); }
     background-clip: padding-box;
 }
 
-/* 所属コース未設定時：閲覧は可能だが、登録・編集対象であることを弱めて表示 */
-.item.locked {
-    cursor: not-allowed;
-    opacity: 0.65;
-}
-.item.locked:hover {
-    border-color: var(--border);
-    background: #fff;
-}
-.course-not-selected .cell,
-.course-not-selected .special-box {
-    cursor: not-allowed;
-    opacity: 0.72;
+
+
+/* --- PCレイアウト改善 v2 --- */
+html {
+    background: var(--bg);
 }
 
-/* 特殊枠に登録済み講義を表示するための調整 */
-.special-box.has-lectures {
-    align-items: stretch;
+body {
+    padding: 16px;
+    overflow-x: auto;
+}
+
+.wrapper {
+    max-width: 1680px;
+    min-width: 1180px;
+    grid-template-columns: 300px minmax(560px, 1fr) 280px;
+    gap: 14px;
+    align-items: start;
+}
+
+.main-header {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 18px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 6px 18px rgba(44, 62, 80, 0.08);
+    backdrop-filter: blur(8px);
+}
+
+.brand-block {
+    display: flex;
+    align-items: baseline;
+    gap: 18px;
+    min-width: 0;
+}
+
+.brand-block h1 {
+    margin: 0;
+    color: var(--accent);
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+
+.version-label {
+    font-size: 0.75rem;
+    color: #7f8c8d;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+.header-meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    font-size: 0.72rem;
+    color: #607080;
+}
+
+.header-meta span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 2px 9px;
+    border: 1px solid #edf0f2;
+    border-radius: 999px;
+    background: #f8fafb;
+    white-space: nowrap;
+}
+
+#header-alert-status.has-alerts {
+    color: #c0392b;
+    background: #fff5f5;
+    border-color: #f5b7b1;
+    font-weight: 700;
+}
+
+#header-alert-status.no-alerts {
+    color: var(--success);
+    background: #f3fbf6;
+    border-color: #ccebd8;
+    font-weight: 700;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.header-actions button {
+    min-height: 34px;
+    padding: 8px 13px;
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(52, 152, 219, 0.18);
+}
+
+.header-actions button:hover {
+    filter: brightness(0.96);
+}
+
+.header-actions button.outline {
+    background: #fff;
+    color: var(--accent);
+    box-shadow: none;
+}
+
+.catalog-panel,
+.status-panel,
+main {
+    min-width: 0;
+}
+
+.status-panel {
+    position: sticky;
+    top: 86px;
+}
+
+.card {
+    border: 1px solid rgba(220, 221, 225, 0.76);
+}
+
+.catalog-panel .card,
+.status-panel .card {
+    padding: 12px;
+    margin-bottom: 10px;
+}
+
+.catalog-panel h2,
+.status-panel h2,
+.timetable-card h2 {
+    font-size: 0.82rem;
+    margin-bottom: 9px;
+}
+
+.catalog-scroll {
+    max-height: calc(100vh - 370px);
+    min-height: 360px;
+}
+
+.tabs-container {
+    display: block;
+    margin-bottom: 10px;
+}
+
+.tab-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+
+.tab {
+    padding: 11px 10px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    font-size: 0.82rem;
+    box-shadow: 0 2px 8px rgba(44, 62, 80, 0.06);
+}
+
+.tab:not(.active) {
+    background: #fff;
+    border-color: var(--border);
+    color: #607080;
+}
+
+.timetable-card {
+    padding: 13px;
+}
+
+.timetable-card table {
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.timetable-card th {
+    height: 30px;
+    font-size: 0.72rem;
+}
+
+.timetable-card td {
+    height: 78px;
+}
+
+.special-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 14px;
+}
+
+.special-box {
+    min-height: 66px;
+    border-radius: 10px;
+}
+
+.stat-row {
+    gap: 4px;
+}
+
+.stat-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.stat-name {
+    min-width: 0;
+}
+
+.stat-name.sub {
+    color: #7f8c8d;
+}
+
+.stat-value {
+    white-space: nowrap;
+}
+
+.stat-extra {
+    font-size: 0.6rem;
+    color: #e67e22;
+}
+
+.stat-progress {
+    height: 6px;
+    border-radius: 999px;
+    background: #edf0f2;
+    overflow: hidden;
+}
+
+.stat-progress-bar {
+    height: 100%;
+    width: var(--progress, 0%);
+    border-radius: inherit;
+    background: var(--success);
+}
+
+.stat-progress-bar.incomplete {
+    background: var(--accent);
+}
+
+.full-width {
+    margin-top: 2px;
+}
+
+.usage-container {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+/* PC版を優先して調整中のため、狭いウィンドウでは崩さず横スクロールで逃がす */
+@media (max-width: 1180px) {
+    body {
+        padding: 12px;
+    }
+}
+
+/* 初期化修正: 特殊枠と未選択時メッセージ */
+.special-box.has-lecture {
     justify-content: flex-start;
-    border-style: solid;
-    border-color: var(--accent);
-    background: #f8fbff;
+    align-items: stretch;
+    padding-top: 12px;
 }
-.special-box.has-lectures > div:not(.special-label) {
-    width: 100%;
-    margin-top: 8px;
-}
-.special-box.has-lectures .lecture-tile {
+
+.special-box .lecture-tile {
     width: 100%;
     box-sizing: border-box;
-    text-align: left;
+    margin-bottom: 4px;
+}
+
+.empty-special {
+    color: #95a5a6;
+    font-weight: bold;
+}
+
+.course-gate-message {
+    font-size: 0.78rem;
+    line-height: 1.6;
+    color: #7f8c8d;
+    background: #f8f9fa;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: 10px;
+}
+
+/* --- sticky重なり対策 + PCレイアウト継続調整 v3 --- */
+.page-shell {
+    max-width: 1680px;
+    min-width: 1180px;
+    margin: 0 auto;
+}
+
+.app-grid {
+    display: grid;
+    grid-template-columns: 300px minmax(560px, 1fr) 280px;
+    gap: 14px;
+    align-items: start;
+}
+
+.app-grid > .main-header {
+    grid-column: 1 / -1;
+}
+
+/* stickyの親をアプリ本体だけに限定したため、説明・注意事項エリアで重ならない */
+.catalog-panel,
+.status-panel {
+    align-self: start;
+}
+
+.catalog-panel {
+    position: sticky;
+    top: 86px;
+}
+
+.status-panel {
+    position: sticky;
+    top: 86px;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+    padding-right: 2px;
+    scrollbar-gutter: stable;
+}
+
+.usage-card {
+    margin-top: 14px;
+    position: relative;
+    z-index: 1;
+}
+
+/* 左右パネルは固定表示時にもカード間のまとまりが分かるように少しだけ締める */
+.catalog-panel .card:first-child,
+.status-panel .card:first-child {
+    margin-top: 0;
+}
+
+.status-panel::-webkit-scrollbar,
+.catalog-scroll::-webkit-scrollbar {
+    width: 8px;
+}
+
+.status-panel::-webkit-scrollbar-thumb,
+.catalog-scroll::-webkit-scrollbar-thumb {
+    background: #d6dde3;
+    border-radius: 999px;
+}
+
+.status-panel::-webkit-scrollbar-track,
+.catalog-scroll::-webkit-scrollbar-track {
+    background: transparent;
 }

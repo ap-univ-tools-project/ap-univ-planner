@@ -7,17 +7,27 @@
 </head>
 <body>
 
-<div class="wrapper">
-    <header class="main-header" style="padding: 10px 0 10px 5px; grid-column: 1 / -1;">
-        <h1 style="font-size: 1.4rem; color: var(--accent); margin: 0; font-weight: 800; letter-spacing: 0.05em;">
-            AP-Univ-Planner 
-            <span style="font-size: 0.8rem; font-weight: normal; opacity: 0.8;">
-                v1.0 <span id="update-date-display" style="margin-left: 10px; border-left: 1px solid #ccc; padding-left: 10px;"></span>
-            </span>
-        </h1>
+<div class="page-shell">
+<div class="app-grid">
+    <header class="main-header">
+        <div class="brand-block">
+            <h1>AP-Univ-Planner <span class="version-label">v1.0</span></h1>
+            <div class="header-meta">
+                <span id="update-date-display">Data: --</span>
+                <span id="header-course-status">所属: 未設定</span>
+                <span id="header-alert-status">通知: -</span>
+            </div>
+        </div>
+        <div class="header-actions" aria-label="データ管理">
+            <button onclick="exportData()">保存(.json)</button>
+            <button onclick="document.getElementById('import-file').click()">読込(.json)</button>
+            <button class="outline" onclick="document.getElementById('catalog-diff-file').click()">カタログ拡張(.json)</button>
+            <input type="file" id="import-file" style="display:none" accept=".json" onchange="importData(event)">
+            <input type="file" id="catalog-diff-file" style="display:none" accept=".json" onchange="importCatalogDiff(event)">
+        </div>
     </header>
 
-    <aside>
+    <aside class="catalog-panel">
         <div class="card" style="border-top: 4px solid var(--accent);">
             <h2>1. 所属コース設定</h2>
             <select id="my-course-select">
@@ -81,13 +91,11 @@
             <div class="tab-row">
                 <div class="tab active" id="tab-m1z" onclick="switchTab('m1z')">M1 前期</div>
                 <div class="tab" id="tab-m1k" onclick="switchTab('m1k')">M1 後期</div>
-            </div>
-            <div class="tab-row">
                 <div class="tab" id="tab-m2z" onclick="switchTab('m2z')">M2 前期</div>
                 <div class="tab" id="tab-m2k" onclick="switchTab('m2k')">M2 後期</div>
             </div>
         </div>
-        <div class="card">
+        <div class="card timetable-card">
             <h2 id="table-title">M1 前期 時間割</h2>
             <table>
                 <thead><tr><th style="width:30px"></th><th>月</th><th>火</th><th>水</th><th>木</th><th>金</th></tr></thead>
@@ -110,21 +118,7 @@
         </div>
     </main>
 
-    <aside>
-        <div class="card">
-            <h2>データ管理</h2>
-            <div style="display:flex; gap:5px; margin-bottom: 8px;">
-                <button onclick="exportData()" style="flex:1; padding:8px; cursor:pointer; font-size:0.7rem;">保存(.json)</button>
-                <button onclick="document.getElementById('import-file').click()" style="flex:1; padding:8px; cursor:pointer; font-size:0.7rem;">読込(.json)</button>
-            </div>
-            <button onclick="document.getElementById('catalog-diff-file').click()" 
-                    style="width:100%; padding:8px; cursor:pointer; font-size:0.7rem; background:#fff; border:1px solid var(--accent); color:var(--accent); border-radius:4px;">
-                カタログ拡張(.json)
-            </button>
-            
-            <input type="file" id="import-file" style="display:none" accept=".json" onchange="importData(event)">
-            <input type="file" id="catalog-diff-file" style="display:none" accept=".json" onchange="importCatalogDiff(event)">
-        </div>
+    <aside class="status-panel">
         <div class="card" style="border-top: 4px solid var(--success);">
             <h2>修了要件 進捗</h2>
             <div id="stats-container"></div>
@@ -134,8 +128,9 @@
             <div id="msg-space"></div>
         </div>
     </aside>
+</div>
 
-    <div class="card full-width" style="background: #fdfdfd; border-top: 2px solid var(--border);">
+    <div class="card full-width usage-card" style="background: #fdfdfd; border-top: 2px solid var(--border);">
     <div class="usage-container">
         <div class="usage-section">
             <h3>ご利用方法</h3>
@@ -189,6 +184,7 @@
             </a>
         </div>
     </div>
+</div>
 </div>
 
 <dialog id="selector-dialog">
