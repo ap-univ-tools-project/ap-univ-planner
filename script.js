@@ -733,9 +733,11 @@ function openEditor(id, label) {
 
 // 修正点: 特殊枠（集中・研究・その他）でも関連する講義をクイック登録に表示する
 function renderSuggestedCourses(cellId) {
+    const quickSlot = document.getElementById('quick-register-slot');
     document.getElementById('suggest-label')?.remove();
     document.getElementById('suggested-courses-area')?.remove();
     document.getElementById('suggest-divider')?.remove();
+    if (quickSlot) quickSlot.innerHTML = "";
     
     const match = cellId.match(/c-(\d)-(\d)/);
     const myMajorId = getSelectedMajorId();
@@ -808,43 +810,52 @@ function renderSuggestedCourses(cellId) {
         }
     }
 
-    if (suggestions.length > 0) {
-        let labelText = "開講講義 (クイック登録)";
-        if (match) {
-            const dayName = ['','月','火','水','木','金'][match[1]];
-            labelText = `${dayName}曜${match[2]}限の${labelText}`;
-        }
-        const label = `<label id="suggest-label" class="label-sm" style="color:var(--accent); margin-top:10px;">${escapeHtml(labelText)}</label>`;
-        const listHtml = `
-            <div id="suggested-courses-area" class="suggested-list">
-                ${suggestions.map(s => {
-                    const encodedName = encodeURIComponent(s.name);
-                    const encodedType = encodeURIComponent(s.catKey || s.type);
-                    const registered = isCourseRegistered(s.name);
-                    const isPractice = /^情報科学演習[123]$/.test(s.name);
-                    const classes = [
-                        'suggest-item',
-                        escapeHtml(s.type),
-                        !s.isInternal ? 'external-course' : '',
-                        registered ? 'already-registered' : '',
-                        registered && isPractice ? 'practice-registered' : ''
-                    ].filter(Boolean).join(' ');
-                    const labelText = registered ? '登録済み' : (SYSTEM_CONFIG.CAT_LABELS[s.catKey] || SYSTEM_CONFIG.CAT_LABELS[s.type] || s.type);
-                    return `
-                    <div class="${classes}" title="${registered ? 'すでに登録済みです' : 'クリックして登録'}" onclick="quickRegister(decodeURIComponent('${encodedName}'), decodeURIComponent('${encodedType}'))">
-                        <span>${!s.isInternal ? '<i class="ext-tag">他専攻</i>' : ''}${escapeHtml(s.name)}</span>
-                        <span class="cat-label ${registered ? 'registered-label' : ''}">${escapeHtml(labelText)}</span>
-                    </div>
-                `;}).join('')}
-            </div>
-            <hr id="suggest-divider" style="border:0; border-top:1px solid #eee; margin:10px 0;">
-        `;
-        
-        const hrBeforeEdit = document.querySelector('#editor hr');
-        if (hrBeforeEdit) {
-            hrBeforeEdit.insertAdjacentHTML('beforebegin', label + listHtml);
-        }
+    let labelText = "開講講義（クイック登録）";
+    if (match) {
+        const dayName = ['','月','火','水','木','金'][match[1]];
+        labelText = `${dayName}曜${match[2]}限の開講講義`;
     }
+
+    const headerHtml = `
+        <div class="editor-section-heading">
+            <span class="editor-section-title">${escapeHtml(labelText)}</span>
+            <span class="editor-section-note">候補をクリックして登録</span>
+        </div>
+    `;
+
+    const listHtml = suggestions.length > 0 ? `
+        <div id="suggested-courses-area" class="suggested-list editor-suggested-list">
+            ${suggestions.map(s => {
+                const encodedName = encodeURIComponent(s.name);
+                const encodedType = encodeURIComponent(s.catKey || s.type);
+                const registered = isCourseRegistered(s.name);
+                const isPractice = /^情報科学演習[123]$/.test(s.name);
+                const classes = [
+                    'suggest-item',
+                    escapeHtml(s.type),
+                    !s.isInternal ? 'external-course' : '',
+                    registered ? 'already-registered' : '',
+                    registered && isPractice ? 'practice-registered' : ''
+                ].filter(Boolean).join(' ');
+                const categoryLabel = registered ? '登録済み' : (SYSTEM_CONFIG.CAT_LABELS[s.catKey] || SYSTEM_CONFIG.CAT_LABELS[s.type] || s.type);
+                return `
+                <div class="${classes}" title="${registered ? 'すでに登録済みです' : 'クリックして登録'}" onclick="quickRegister(decodeURIComponent('${encodedName}'), decodeURIComponent('${encodedType}'))">
+                    <span class="suggest-name">${!s.isInternal ? '<i class="ext-tag">他専攻</i>' : ''}${escapeHtml(s.name)}</span>
+                    <span class="cat-label ${registered ? 'registered-label' : ''}">${escapeHtml(categoryLabel)}</span>
+                </div>
+            `;}).join('')}
+        </div>
+    ` : `<div class="editor-empty">この枠に対応するクイック登録候補はありません。</div>`;
+
+    if (quickSlot) {
+        quickSlot.innerHTML = headerHtml + listHtml;
+        return;
+    }
+
+    // 旧HTML構造へのフォールバック
+    const fallbackHtml = `<label id="suggest-label" class="label-sm" style="color:var(--accent); margin-top:10px;">${escapeHtml(labelText)}</label>${listHtml}<hr id="suggest-divider" style="border:0; border-top:1px solid #eee; margin:10px 0;">`;
+    const hrBeforeEdit = document.querySelector('#editor hr');
+    if (hrBeforeEdit) hrBeforeEdit.insertAdjacentHTML('beforebegin', fallbackHtml);
 }
 
 // 修正点: 「情報科学特別研究」などの研究科目(res)がクイック登録された場合、全学期に反映する
@@ -882,16 +893,18 @@ function quickRegister(name, type) {
 
 function renderEditList() {
     const list = document.getElementById('lecture-edit-list');
+    if (!list) return;
     list.innerHTML = "";
     const dataArr = appState[appState.activeTab][activeId] || [];
+
+    if (dataArr.length === 0) {
+        list.innerHTML = `<div class="editor-empty">この枠には登録済み講義がありません。</div>`;
+        return;
+    }
     
     dataArr.forEach((v, idx) => {
         const div = document.createElement('div');
-        div.className = "lecture-tile editor-lecture-row";
-        div.style.display = "flex";
-        div.style.justifyContent = "space-between";
-        div.style.alignItems = "center";
-        div.style.padding = "8px";
+        div.className = "editor-lecture-row";
         
         let catalogItem = null;
         if (typeof coreCourses !== 'undefined') catalogItem = coreCourses.find(c => c.name === v.name);
@@ -906,26 +919,38 @@ function renderEditList() {
             catalogItem = { name: v.name, schedule: `M${n === '3' ? '2' : '1'}前期`, sem: n === '2' ? 'k' : 'z' };
         }
 
+        const main = document.createElement('div');
+        main.className = 'editor-lecture-main';
+
         const nameSpan = document.createElement('span');
-        nameSpan.style.fontWeight = 'bold';
-        nameSpan.style.fontSize = '0.8rem';
+        nameSpan.className = 'editor-lecture-name';
         nameSpan.textContent = v.name;
+        main.appendChild(nameSpan);
+
+        const meta = document.createElement('span');
+        meta.className = 'editor-lecture-meta';
+        const dynamicCat = getDynamicCategory(v.name, getSelectedMajorId());
+        meta.textContent = `${SYSTEM_CONFIG.CAT_LABELS[dynamicCat] || dynamicCat} / ${v.unit || 2}単位`;
+        main.appendChild(meta);
 
         const buttonGroup = document.createElement('div');
-        buttonGroup.style.display = 'flex';
-        buttonGroup.style.gap = '8px';
+        buttonGroup.className = 'editor-row-actions';
 
         const firstButton = document.createElement('button');
+        firstButton.className = 'btn btn-sm btn-secondary';
+        firstButton.type = 'button';
         firstButton.textContent = catalogItem ? '移動' : '編集';
         firstButton.onclick = () => catalogItem ? handleMoveRequest(v.name, idx) : editLecture(idx);
         buttonGroup.appendChild(firstButton);
 
         const deleteButton = document.createElement('button');
+        deleteButton.className = 'btn btn-sm btn-danger';
+        deleteButton.type = 'button';
         deleteButton.textContent = '削除';
         deleteButton.onclick = () => deleteLecture(idx);
         buttonGroup.appendChild(deleteButton);
 
-        div.appendChild(nameSpan);
+        div.appendChild(main);
         div.appendChild(buttonGroup);
         list.appendChild(div);
     });
