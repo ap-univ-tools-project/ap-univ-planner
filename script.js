@@ -46,17 +46,221 @@ function escapeHtml(value) {
         .replace(/'/g, '&#39;');
 }
 
+function isCourseRegistered(courseName) {
+    return ['m1z','m1k','m2z','m2k'].some(t =>
+        Object.values(appState[t] || {}).some(arr =>
+            Array.isArray(arr) && arr.some(v => v.name === courseName)
+        )
+    );
+}
+
+
+function getSelectedMajorId() {
+    return document.getElementById('my-course-select')?.value || "";
+}
+
+function getBaseCategory(catKey, fallbackType = 'manual') {
+    if (catKey === 'other-adv') return 'adv';
+    if (catKey === 'other-rel') return 'rel';
+    if (catKey && catKey !== 'manual') return catKey;
+    if (fallbackType === 'other-adv') return 'adv';
+    if (fallbackType === 'other-rel') return 'rel';
+    return fallbackType || 'manual';
+}
+
+function isExternalCategory(catKey) {
+    return catKey === 'other-adv' || catKey === 'other-rel';
+}
+
+function getCourseResolvedCategory(courseName, fallbackType = 'manual', myMajorId = getSelectedMajorId()) {
+    const dynamicCat = getDynamicCategory(courseName, myMajorId);
+    if (dynamicCat && dynamicCat !== 'manual') return dynamicCat;
+    return fallbackType || 'manual';
+}
+
+function buildSuggestion(course, fallbackType = course?.type || 'manual') {
+    const catKey = getCourseResolvedCategory(course.name, fallbackType);
+    const type = getBaseCategory(catKey, fallbackType);
+    return {
+        ...course,
+        type,
+        catKey,
+        isInternal: !isExternalCategory(catKey)
+    };
+}
+
+function shouldReplaceSuggestion(existing, candidate) {
+    if (!existing) return true;
+    // 同名科目が複数専攻に存在する場合は、必ず自専攻扱いを優先する。
+    if (isExternalCategory(existing.catKey) && !isExternalCategory(candidate.catKey)) return true;
+    if (existing.catKey === 'manual' && candidate.catKey !== 'manual') return true;
+    return false;
+}
+
+function addResolvedSuggestion(list, course, fallbackType = course?.type || 'manual') {
+    const candidate = buildSuggestion(course, fallbackType);
+    const idx = list.findIndex(s => s.name === candidate.name);
+    if (idx === -1) {
+        list.push(candidate);
+    } else if (shouldReplaceSuggestion(list[idx], candidate)) {
+        list[idx] = { ...list[idx], ...candidate };
+    }
+}
+
 function getLectureTileHtml(v, myMajorId) {
     const dynamicCat = getDynamicCategory(v.name, myMajorId);
     const tagClass = dynamicCat === 'other-adv' ? 'tag-other-adv' :
                      dynamicCat === 'other-rel' ? 'tag-other-rel' : `tag-${dynamicCat}`;
-    return `<div class="lecture-tile">
-        <div style="font-weight:bold;">${escapeHtml(v.name)}</div>
-        <span class="cat-tag ${escapeHtml(tagClass)}">${escapeHtml(SYSTEM_CONFIG.CAT_LABELS[dynamicCat] || dynamicCat)}</span>
+    const label = SYSTEM_CONFIG.CAT_LABELS[dynamicCat] || dynamicCat;
+    const unit = Number.isFinite(Number(v.unit)) ? `${Number(v.unit)}単位` : '';
+    return `<div class="lecture-tile tile-${escapeHtml(dynamicCat)}" title="${escapeHtml(v.name)}">
+        <div class="lecture-name">${escapeHtml(v.name)}</div>
+        <div class="lecture-meta">
+            <span class="cat-tag ${escapeHtml(tagClass)}">${escapeHtml(label)}</span>
+            ${unit ? `<span class="unit-chip">${escapeHtml(unit)}</span>` : ''}
+        </div>
     </div>`;
 }
 
-function renderSpecialBoxes(currentData, myMajorId) {
+const HIGHLIGHT_PATTERNS = {
+    core: { key: 'core', background: 'var(--major-core)' },
+    myAdv: { key: 'my-adv', background: 'var(--major-adv)' },
+    extAdv: { key: 'ext-adv', background: 'repeating-linear-gradient(45deg, var(--major-adv), var(--major-adv) 5px, #fcf3cf 5px, #fcf3cf 10px)' },
+    myRel: { key: 'my-rel', background: 'var(--related)' },
+    extRel: { key: 'ext-rel', background: 'repeating-linear-gradient(45deg, var(--related), var(--related) 5px, #ebdef0 5px, #ebdef0 10px)' },
+    research: { key: 'research', background: 'var(--research-bg)' }
+};
+
+function cloneHighlightPart(part) {
+    return { key: part.key, background: part.background };
+}
+
+function getHighlightTargetMatcher(slotId) {
+    const normalMatch = String(slotId).match(/^c-(\d)-(\d)$/);
+    if (normalMatch) {
+        const targetDay = parseInt(normalMatch[1], 10);
+        const targetPeriod = parseInt(normalMatch[2], 10);
+        return (course, currentTerm) => course.day === targetDay && course.period === targetPeriod && course.sem === currentTerm;
+    }
+
+    if (slotId === 'c-intensive') {
+        return (course, currentTerm) => Boolean(course.isIntensive) && course.sem === currentTerm;
+    }
+
+    if (slotId === 'c-other') {
+        return (course, currentTerm) => Boolean(course.isOther) && course.sem === currentTerm;
+    }
+
+    return null;
+}
+
+function collectSlotHighlightParts(slotId, currentTerm, highlightMode, myMajorId) {
+    if (highlightMode === 'off') return [];
+
+    // 特別研究は曜日時限を持たない専用科目として扱う。
+    // 描画は通常枠と同じ applySlotHighlight() に通す。
+    if (slotId === 'c-research') {
+        return [cloneHighlightPart(HIGHLIGHT_PATTERNS.research)];
+    }
+
+    const matchesTarget = getHighlightTargetMatcher(slotId);
+    if (!matchesTarget) return [];
+
+    const categories = new Set();
+    const addCategory = (course, fallbackType) => {
+        const catKey = getCourseResolvedCategory(course.name, fallbackType, myMajorId);
+        if (highlightMode === 'my-major' && isExternalCategory(catKey)) return;
+        if (catKey && catKey !== 'manual') categories.add(catKey);
+    };
+
+    if (typeof coreCourses !== 'undefined') {
+        coreCourses.forEach(c => {
+            if (matchesTarget(c, currentTerm)) addCategory(c, 'core');
+        });
+    }
+
+    if (typeof majorMasters !== 'undefined') {
+        Object.keys(majorMasters).forEach(majorId => {
+            ['adv', 'rel'].forEach(type => {
+                (majorMasters[majorId][type] || []).forEach(c => {
+                    if (matchesTarget(c, currentTerm)) {
+                        const fallbackType = majorId === myMajorId ? type : `other-${type}`;
+                        addCategory(c, fallbackType);
+                    }
+                });
+            });
+        });
+    }
+
+    const parts = [];
+    if (categories.has('core')) parts.push(cloneHighlightPart(HIGHLIGHT_PATTERNS.core));
+    if (categories.has('adv')) parts.push(cloneHighlightPart(HIGHLIGHT_PATTERNS.myAdv));
+    if (categories.has('other-adv')) parts.push(cloneHighlightPart(HIGHLIGHT_PATTERNS.extAdv));
+
+    // v12: 関連科目も専門科目と同じく、自専攻(単色)と他専攻(ストライプ)を共存表示する。
+    // 以前は「自専攻関連がある場合は他専攻関連を隠す」仕様だったため、
+    // 集中講義枠で「情報システム特論(自関連) + 高信頼情報システム特論(他関連)」が
+    // 単色だけに見えていた。
+    if (categories.has('rel')) parts.push(cloneHighlightPart(HIGHLIGHT_PATTERNS.myRel));
+    if (categories.has('other-rel')) parts.push(cloneHighlightPart(HIGHLIGHT_PATTERNS.extRel));
+
+    return normalizeHighlightParts(parts);
+}
+
+function normalizeHighlightParts(parts) {
+    const seen = new Set();
+    return (parts || []).filter(part => {
+        if (!part || !part.background) return false;
+        const key = part.key || part.background;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
+function clearSlotHighlight(element) {
+    if (!element) return;
+    element.classList.remove('slot-highlighted', 'slot-highlight-single', 'slot-highlight-split');
+    element.style.background = '';
+    element.style.backgroundColor = '';
+    Array.from(element.children || []).forEach(child => {
+        if (
+            child.classList?.contains('slot-bg') ||
+            child.classList?.contains('slot-highlight-layer') ||
+            child.classList?.contains('special-highlight-bg')
+        ) {
+            child.remove();
+        }
+    });
+}
+
+function applySlotHighlight(element, parts) {
+    if (!element) return;
+    const normalized = normalizeHighlightParts(parts);
+    clearSlotHighlight(element);
+    if (normalized.length === 0) return;
+
+    // v10: 単色でも複数色でも、通常枠・特殊枠とも必ず同じ背景レイヤーを使う。
+    // 親要素の background に直接入れないことで、td と div のCSS差分を排除する。
+    element.classList.add('slot-highlighted');
+    element.classList.toggle('slot-highlight-single', normalized.length === 1);
+    element.classList.toggle('slot-highlight-split', normalized.length > 1);
+
+    const layer = document.createElement('div');
+    layer.className = `slot-bg slot-bg-count-${normalized.length}`;
+    layer.style.gridTemplateColumns = `repeat(${normalized.length}, minmax(0, 1fr))`;
+
+    normalized.forEach(part => {
+        const segment = document.createElement('span');
+        segment.className = `slot-bg-part slot-bg-${part.key || 'part'}`;
+        segment.style.background = part.background;
+        layer.appendChild(segment);
+    });
+
+    element.insertBefore(layer, element.firstChild);
+}
+
+function renderSpecialBoxes(currentData, myMajorId, currentTerm, highlightMode) {
     const targets = [
         { id: 'c-intensive', contentId: 'intensive-content' },
         { id: 'c-research', contentId: 'research-content' },
@@ -68,11 +272,17 @@ function renderSpecialBoxes(currentData, myMajorId) {
         const content = document.getElementById(contentId);
         if (!box || !content) return;
 
+        clearSlotHighlight(box);
         const arr = currentData[id] || [];
         box.classList.toggle('has-lecture', arr.length > 0);
+
         content.innerHTML = arr.length > 0
             ? arr.map(v => getLectureTileHtml(v, myMajorId)).join('')
             : '<span class="empty-special">追加</span>';
+
+        if (arr.length === 0) {
+            applySlotHighlight(box, collectSlotHighlightParts(id, currentTerm, highlightMode, myMajorId));
+        }
     });
 }
 
@@ -288,6 +498,9 @@ function loadCatalog() {
         const order = { core: 1, adv: 2, rel: 3, prac: 4, res: 5 };
         result.sort((a, b) => order[a.type] - order[b.type]);
     }
+
+    const countLabel = document.getElementById('catalog-count-label');
+    if (countLabel) countLabel.textContent = `${result.length}件`;
 
     result.forEach(c => createDefinedItem(c, c.type, listAll, registeredNames));
 }
@@ -525,13 +738,13 @@ function renderSuggestedCourses(cellId) {
     document.getElementById('suggest-divider')?.remove();
     
     const match = cellId.match(/c-(\d)-(\d)/);
-    const currentCatCourseId = document.getElementById('catalog-course-select').value;
+    const myMajorId = getSelectedMajorId();
     const currentTab = appState.activeTab;
     const currentTerm = appState.activeTab.slice(-1); 
 
     let suggestions = [];
-    const addSuggestion = (course) => {
-        if (!suggestions.some(s => s.name === course.name)) suggestions.push(course);
+    const addSuggestion = (course, fallbackType = course?.type || 'manual') => {
+        addResolvedSuggestion(suggestions, course, fallbackType);
     };
     
     // 通常枠の判定
@@ -542,29 +755,28 @@ function renderSuggestedCourses(cellId) {
         if(typeof coreCourses !== 'undefined') {
             coreCourses.forEach(c => {
                 if (c.day === targetDay && c.period === targetPeriod && c.sem === currentTerm) {
-                    addSuggestion({...c, type: 'core', isInternal: true});
+                    addSuggestion(c, 'core');
                 }
             });
         }
         if(typeof majorMasters !== 'undefined') {
-            for (const majorId in majorMasters) {
-                const isInternal = (majorId === currentCatCourseId);
+            Object.keys(majorMasters).forEach(majorId => {
                 ['adv', 'rel'].forEach(type => {
-                    majorMasters[majorId][type].forEach(c => {
+                    (majorMasters[majorId][type] || []).forEach(c => {
                         if (c.day === targetDay && c.period === targetPeriod && c.sem === currentTerm) {
-                            addSuggestion({...c, type, isInternal});
+                            addSuggestion(c, majorId === myMajorId ? type : `other-${type}`);
                         }
                     });
                 });
-            }
+            });
         }
 
         const practiceByTab = {
-            m1z: { name: "情報科学演習1", schedule: "M1前期のみ", sem: 'z', type: 'prac', isInternal: true },
-            m1k: { name: "情報科学演習2", schedule: "M1後期のみ", sem: 'k', type: 'prac', isInternal: true },
-            m2z: { name: "情報科学演習3", schedule: "M2前期のみ", sem: 'z', type: 'prac', isInternal: true }
+            m1z: { name: "情報科学演習1", schedule: "M1前期のみ", sem: 'z', type: 'prac' },
+            m1k: { name: "情報科学演習2", schedule: "M1後期のみ", sem: 'k', type: 'prac' },
+            m2z: { name: "情報科学演習3", schedule: "M2前期のみ", sem: 'z', type: 'prac' }
         };
-        if (practiceByTab[currentTab]) addSuggestion(practiceByTab[currentTab]);
+        if (practiceByTab[currentTab]) addSuggestion(practiceByTab[currentTab], 'prac');
     } 
     // 特殊枠（集中・特別研究・その他）の判定
     else {
@@ -573,27 +785,25 @@ function renderSuggestedCourses(cellId) {
         const isOtherSlot = cellId.includes('other');
 
         if (isResearchSlot) {
-            addSuggestion({ name: "情報科学特別研究", type: "res", isInternal: true });
+            addSuggestion({ name: "情報科学特別研究", type: "res" }, 'res');
         } else if (isIntensiveSlot || isOtherSlot) {
-            // カタログから集中講義またはその他属性を持つものを抽出
             if(typeof coreCourses !== 'undefined') {
                 coreCourses.forEach(c => {
                     if ((isIntensiveSlot && c.isIntensive) || (isOtherSlot && c.isOther)) {
-                        if (c.sem === currentTerm) addSuggestion({...c, type: 'core', isInternal: true});
+                        if (c.sem === currentTerm) addSuggestion(c, 'core');
                     }
                 });
             }
             if(typeof majorMasters !== 'undefined') {
-                for (const majorId in majorMasters) {
-                    const isInternal = (majorId === currentCatCourseId);
+                Object.keys(majorMasters).forEach(majorId => {
                     ['adv', 'rel'].forEach(type => {
-                        majorMasters[majorId][type].forEach(c => {
+                        (majorMasters[majorId][type] || []).forEach(c => {
                             if ((isIntensiveSlot && c.isIntensive) || (isOtherSlot && c.isOther)) {
-                                if (c.sem === currentTerm) addSuggestion({...c, type, isInternal});
+                                if (c.sem === currentTerm) addSuggestion(c, majorId === myMajorId ? type : `other-${type}`);
                             }
                         });
                     });
-                }
+                });
             }
         }
     }
@@ -609,11 +819,21 @@ function renderSuggestedCourses(cellId) {
             <div id="suggested-courses-area" class="suggested-list">
                 ${suggestions.map(s => {
                     const encodedName = encodeURIComponent(s.name);
-                    const encodedType = encodeURIComponent(s.type);
+                    const encodedType = encodeURIComponent(s.catKey || s.type);
+                    const registered = isCourseRegistered(s.name);
+                    const isPractice = /^情報科学演習[123]$/.test(s.name);
+                    const classes = [
+                        'suggest-item',
+                        escapeHtml(s.type),
+                        !s.isInternal ? 'external-course' : '',
+                        registered ? 'already-registered' : '',
+                        registered && isPractice ? 'practice-registered' : ''
+                    ].filter(Boolean).join(' ');
+                    const labelText = registered ? '登録済み' : (SYSTEM_CONFIG.CAT_LABELS[s.catKey] || SYSTEM_CONFIG.CAT_LABELS[s.type] || s.type);
                     return `
-                    <div class="suggest-item ${escapeHtml(s.type)} ${!s.isInternal ? 'external-course' : ''}" onclick="quickRegister(decodeURIComponent('${encodedName}'), decodeURIComponent('${encodedType}'))">
+                    <div class="${classes}" title="${registered ? 'すでに登録済みです' : 'クリックして登録'}" onclick="quickRegister(decodeURIComponent('${encodedName}'), decodeURIComponent('${encodedType}'))">
                         <span>${!s.isInternal ? '<i class="ext-tag">他専攻</i>' : ''}${escapeHtml(s.name)}</span>
-                        <span class="cat-label">${escapeHtml(SYSTEM_CONFIG.CAT_LABELS[s.type] || s.type)}</span>
+                        <span class="cat-label ${registered ? 'registered-label' : ''}">${escapeHtml(labelText)}</span>
                     </div>
                 `;}).join('')}
             </div>
@@ -759,85 +979,26 @@ function refresh() {
     const currentTerm = appState.activeTab.slice(-1);
     const highlightMode = document.getElementById('highlight-mode')?.value || "off";
 
-    // 他専攻ストライプをグラデーション内で再現するためのCSS定義
-    const STRIPE_ADV = `repeating-linear-gradient(45deg, var(--major-adv), var(--major-adv) 5px, #fcf3cf 5px, #fcf3cf 10px)`;
-    const STRIPE_REL = `repeating-linear-gradient(45deg, var(--related), var(--related) 5px, #ebdef0 5px, #ebdef0 10px)`;
-
     document.querySelectorAll('.cell').forEach(td => {
         const arr = currentData[td.id] || [];
-        const match = td.id.match(/c-(\d)-(\d)/);
-        
+        const isConflict = arr.length > 1;
+
+        td.className = "cell";
+        td.style.display = "";
         td.style.background = "";
         td.style.backgroundColor = "";
-        td.className = "cell";
+        td.innerHTML = "";
+        clearSlotHighlight(td);
+        td.classList.toggle('conflict-cell', isConflict);
 
-        if (highlightMode !== "off" && match && arr.length === 0) {
-            const d = parseInt(match[1]);
-            const p = parseInt(match[2]);
-            
-            let hasCore = false, hasMyAdv = false, hasExtAdv = false, hasMyRel = false, hasExtRel = false;
-
-            if (typeof coreCourses !== 'undefined') {
-                hasCore = coreCourses.some(c => c.day === d && c.period === p && c.sem === currentTerm);
-            }
-            if (typeof majorMasters !== 'undefined') {
-                for (const mId in majorMasters) {
-                    const isMy = (mId === myMajorId);
-                    if (highlightMode === "my-major" && !isMy) continue;
-
-                    majorMasters[mId].adv.forEach(c => {
-                        if (c.day === d && c.period === p && c.sem === currentTerm) { if (isMy) hasMyAdv = true; else hasExtAdv = true; }
-                    });
-                    majorMasters[mId].rel.forEach(c => {
-                        if (c.day === d && c.period === p && c.sem === currentTerm) { if (isMy) hasMyRel = true; else hasExtRel = true; }
-                    });
-                }
-            }
-
-            // --- 色・模様のリスト作成 ---
-            let bgParts = [];
-            
-            if (hasCore) bgParts.push('var(--major-core)'); // 共通：ベタ
-            if (hasMyAdv) bgParts.push('var(--major-adv)');  // 自専門：ベタ
-            
-            // 【専門は共存】他専攻の専門があればストライプを追加
-            if (hasExtAdv) bgParts.push(STRIPE_ADV);
-
-            // 【関連は自専攻優先】
-            if (hasMyRel) {
-                bgParts.push('var(--related)'); // 自関連：ベタ
-            } else if (hasExtRel && bgParts.length === 0) {
-                // 自専攻が他に何もない場合のみ、他専攻の関連をストライプで表示
-                bgParts.push(STRIPE_REL);
-            }
-
-            // --- レンダリング ---
-            if (bgParts.length === 1) {
-                td.style.background = bgParts[0];
-            } else if (bgParts.length > 1) {
-                // 複数の要素（ベタとストライプなど）を分割表示
-                const step = 100 / bgParts.length;
-                let gradient = `linear-gradient(135deg`;
-                bgParts.forEach((part, i) => {
-                    // ストライプ(repeating-linear...)を直接linear-gradientの引数には入れられないため
-                    // ここでは単一背景として重ねるか、CSSの仕組み上、色のみを分割します。
-                    // 確実に分割するために「色」と「模様」を使い分けます。
-                });
-                
-                // 簡潔かつ確実に分割表示するための実装
-                td.style.display = "grid";
-                td.style.gridTemplateColumns = `repeat(${bgParts.length}, 1fr)`;
-                td.innerHTML = bgParts.map(bg => `<div style="background:${bg}; height:100%; width:100%;"></div>`).join('');
-                return; // 下の innerHTML 上書きをスキップ
-            }
+        if (arr.length === 0) {
+            applySlotHighlight(td, collectSlotHighlightParts(td.id, currentTerm, highlightMode, myMajorId));
+        } else {
+            td.innerHTML = arr.map(v => getLectureTileHtml(v, myMajorId)).join('');
         }
-
-        // 通常の講義タイル表示（中身がある場合）
-        td.style.display = ""; // grid解除
-        td.innerHTML = arr.map(v => getLectureTileHtml(v, myMajorId)).join('');
     });
 
-    renderSpecialBoxes(currentData, myMajorId);
+    renderSpecialBoxes(currentData, myMajorId, currentTerm, highlightMode);
     if (!isCourseSelected()) {
         renderCourseGateStatus();
     } else {
@@ -871,12 +1032,12 @@ function calculateAndNotify() {
     const L = SYSTEM_CONFIG.REQ_LIMITS;
     const tAdv = Math.min(s.otheradv, L.OTHER_ADV_LIMIT), tRel = Math.min(s.otherrel, L.OTHER_REL_LIMIT);
     const items = [
-        { n: `専門科目 合計 (${L.TOTAL_ADV_REQ})`, v: s.core + s.adv + tAdv, r: L.TOTAL_ADV_REQ },
-        { n: `└ 共通 (${L.CORE_MIN})`, v: s.core, r: L.CORE_MIN, sub: true },
-        { n: `└ 専攻 (${L.MAJOR_MIN})`, v: s.adv + tAdv, r: L.MAJOR_MIN, sub: true, extra: `(内、他専攻振替: ${tAdv}/${L.OTHER_ADV_LIMIT})` },
-        { n: `関連科目 (${L.REL_MIN})`, v: s.rel + tRel, r: L.REL_MIN, extra: `(内、他専攻振替: ${tRel}/${L.OTHER_REL_LIMIT})` },
-        { n: `情報科学演習 (${L.PRAC_MIN})`, v: s.prac, r: L.PRAC_MIN },
-        { n: `情報科学特別研究 (${L.RES_MIN})`, v: s.res, r: L.RES_MIN }
+        { n: `専門科目 合計 (${L.TOTAL_ADV_REQ})`, v: s.core + s.adv + tAdv, r: L.TOTAL_ADV_REQ, cat: 'total' },
+        { n: `└ 共通 (${L.CORE_MIN})`, v: s.core, r: L.CORE_MIN, sub: true, cat: 'core' },
+        { n: `└ 専攻 (${L.MAJOR_MIN})`, v: s.adv + tAdv, r: L.MAJOR_MIN, sub: true, cat: 'adv', extra: `(内、他専攻振替: ${tAdv}/${L.OTHER_ADV_LIMIT})` },
+        { n: `関連科目 (${L.REL_MIN})`, v: s.rel + tRel, r: L.REL_MIN, cat: 'rel', extra: `(内、他専攻振替: ${tRel}/${L.OTHER_REL_LIMIT})` },
+        { n: `情報科学演習 (${L.PRAC_MIN})`, v: s.prac, r: L.PRAC_MIN, cat: 'prac' },
+        { n: `情報科学特別研究 (${L.RES_MIN})`, v: s.res, r: L.RES_MIN, cat: 'res' }
     ];
 
     const statsContainer = document.getElementById('stats-container');
@@ -885,7 +1046,7 @@ function calculateAndNotify() {
             const progress = Math.max(0, Math.min(100, Math.round((i.v / i.r) * 100)));
             const isOk = i.v >= i.r;
             return `
-            <div class="stat-row">
+            <div class="stat-row stat-${escapeHtml(i.cat || 'manual')}">
                 <div class="stat-main">
                     <span class="stat-name ${i.sub ? 'sub' : ''}" style="${!i.sub ? 'font-weight:bold;' : ''}">${escapeHtml(i.n)}</span>
                     <span class="stat-value"><b>${i.v}</b> / ${i.r} <span class="badge ${isOk ? 'bg-ok' : 'bg-no'}">${isOk ? 'OK' : i.v - i.r}</span></span>

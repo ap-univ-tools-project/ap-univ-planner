@@ -28,58 +28,67 @@
     </header>
 
     <aside class="catalog-panel">
-        <div class="card" style="border-top: 4px solid var(--accent);">
-            <h2>1. 所属コース設定</h2>
+        <div class="card catalog-control-card">
+            <h2>カタログ操作</h2>
+
+            <label class="label-sm" for="my-course-select">所属</label>
             <select id="my-course-select">
                 <option value="" disabled selected>-- 専攻を選択してください --</option>
                 <option value="1">情報システム専攻</option>
                 <option value="2">メディア情報専攻</option>
                 <option value="3">システム科学専攻</option>
             </select>
-        </div>
-        <div class="card">
-            <h2>2. カタログ表示設定</h2>
-            <select id="catalog-course-select">
-                <option value="all" selected>全専攻</option>
-                <option value="1">情報システム専攻</option>
-                <option value="2">メディア情報専攻</option>
-                <option value="3">システム科学専攻</option>
-            </select>
-            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #eee;">
-                <label class="label-sm" style="display:block; margin-bottom:5px;">空きコマのハイライト</label>
-                <select id="highlight-mode" onchange="refresh()" style="width:100%; font-size: 0.7rem; background: #fffbe6; border-color: #ffe58f;">
-                    <option value="off">ハイライトOFF</option>
-                    <option value="all">カタログ全科目を対象</option>
-                    <option value="my-major">所属専攻の科目のみ</option>
-                </select>
+
+            <div class="catalog-inline-fields">
+                <div>
+                    <label class="label-sm" for="catalog-course-select">表示</label>
+                    <select id="catalog-course-select">
+                        <option value="all" selected>全専攻</option>
+                        <option value="1">情報システム専攻</option>
+                        <option value="2">メディア情報専攻</option>
+                        <option value="3">システム科学専攻</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="label-sm" for="highlight-mode">ハイライト</label>
+                    <select id="highlight-mode" onchange="refresh()">
+                        <option value="off">OFF</option>
+                        <option value="all">全科目</option>
+                        <option value="my-major">所属のみ</option>
+                    </select>
+                </div>
             </div>
-        </div>
-        <div class="card" style="padding-bottom: 10px;">
-            <label class="label-sm">カタログ内検索・ソート</label>
-            <input type="text" id="catalog-search" placeholder="科目名で検索..." style="margin-bottom: 8px;" oninput="loadCatalog()">
-            <div style="display:flex; gap:5px; margin-bottom: 5px;">
-                <select id="catalog-filter-cat" onchange="loadCatalog()" style="flex:1; font-size: 0.7rem;">
+
+            <label class="label-sm" for="catalog-search">検索</label>
+            <input type="text" id="catalog-search" placeholder="科目名で検索..." oninput="loadCatalog()">
+
+            <div class="catalog-inline-fields compact">
+                <select id="catalog-filter-cat" onchange="loadCatalog()">
                     <option value="all">全科目群</option>
                     <option value="core">共通のみ</option>
                     <option value="adv">専攻のみ</option>
                     <option value="rel">関連のみ</option>
                     <option value="prac">演習・研究</option>
                 </select>
-                <select id="catalog-filter-time" onchange="loadCatalog()" style="flex:1; font-size: 0.7rem;">
+                <select id="catalog-filter-time" onchange="loadCatalog()">
                     <option value="all">全時間帯</option>
                     <option value="z">前期のみ</option>
                     <option value="k">後期のみ</option>
                     <option value="intensive">集中講義</option>
                 </select>
             </div>
-            <select id="catalog-sort" onchange="loadCatalog()" style="width:100%; font-size: 0.7rem;">
+            <select id="catalog-sort" onchange="loadCatalog()">
                 <option value="default">便覧順</option>
                 <option value="time">開講が早い順 (全体)</option>
                 <option value="name">五十音順 (全体)</option>
             </select>
         </div>
-        <div class="card">
-            <h2>3. 講義カタログ</h2>
+
+        <div class="card catalog-list-card">
+            <div class="catalog-list-header">
+                <h2>講義カタログ</h2>
+                <span id="catalog-count-label">0件</span>
+            </div>
             <div class="catalog-scroll" id="catalog">
                 <div id="list-all"></div>
             </div>
@@ -104,15 +113,15 @@
             <div class="special-grid">
                 <div class="special-box" id="c-intensive" onclick="openEditor('c-intensive', '集中講義')">
                     <span class="special-label">集中講義</span>
-                    <div id="intensive-content">追加</div>
+                    <div id="intensive-content" class="special-content">追加</div>
                 </div>
                 <div class="special-box" id="c-research" onclick="openEditor('c-research', '特別研究')">
                     <span class="special-label">特別研究</span>
-                    <div id="research-content">追加</div>
+                    <div id="research-content" class="special-content">追加</div>
                 </div>
                 <div class="special-box" id="c-other" onclick="openEditor('c-other', 'その他枠')">
                     <span class="special-label">その他枠</span>
-                    <div id="other-content">追加</div>
+                    <div id="other-content" class="special-content">追加</div>
                 </div>
             </div>
         </div>
@@ -146,7 +155,7 @@
         <div class="usage-section">
             <h3>注意事項・仕様</h3>
             <ul class="usage-list">
-                <li><b>ハイライトの優先度</b>: 同一枠内に「自専攻関連」と「他専攻関連」が混在する場合、視認性を優先して自専攻の色のみを表示します。専門科目の場合は両方の色が分割表示されます。</li>
+                <li><b>ハイライトの表示</b>: 同一枠内に複数カテゴリの候補がある場合、共通・自専攻・他専攻・関連科目を分割表示します。他専攻の候補はストライプで表示されます。</li>
                 <li><b>重複チェック</b>: 同一時間に複数の講義を登録、または同じ講義を重複して登録すると、右下の「アラート」に警告が表示されます。</li>
                 <li><b>振替単位の計算</b>: 他専攻・他コース科目の単位振替（上限あり）は、修了要件進捗に自動で計算・反映されます。</li>
                 <li><b>カタログの拡張</b>: 自身の環境に合わせて特定の講義情報を書き換えたい、または不足している講義を追加したい場合は、<a href="templates/diff_template.json" download style="color: var(--accent); font-weight: bold;">テンプレート(JSON)</a>を編集し、「カタログ拡張」から読み込んでください。</li>
