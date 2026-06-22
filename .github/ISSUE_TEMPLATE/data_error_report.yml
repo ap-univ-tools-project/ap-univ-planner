@@ -1,0 +1,84 @@
+name: 講義データ誤り報告
+about: 講義名・開講時期・曜日時限・カテゴリなど、掲載データの誤りを報告する
+labels: [data]
+title: "[Data]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        講義データの誤り報告ありがとうございます。
+        本ツールは非公式のため、必ず公式シラバス・授業科目一覧などを確認したうえで報告してください。
+  - type: input
+    id: course_name
+    attributes:
+      label: 講義名
+      placeholder: 例）情報システム特論
+    validations:
+      required: true
+  - type: dropdown
+    id: issue_type
+    attributes:
+      label: 誤りの種類
+      multiple: true
+      options:
+        - 開講なし/開講ありの誤り
+        - 学期の誤り
+        - 曜日の誤り
+        - 時限の誤り
+        - 集中講義/その他枠の誤り
+        - 専攻・関連などカテゴリの誤り
+        - 講義名の誤字
+        - 講義が不足している
+        - 講義が重複している
+        - その他
+    validations:
+      required: true
+  - type: dropdown
+    id: major
+    attributes:
+      label: 関係する専攻
+      multiple: true
+      options:
+        - 共通科目
+        - 情報システム専攻
+        - メディア情報専攻
+        - システム科学専攻
+        - 不明
+    validations:
+      required: true
+  - type: textarea
+    id: current_data
+    attributes:
+      label: 現在ツール上で表示されている内容
+      placeholder: 例）前期集中、関連科目として表示される
+    validations:
+      required: true
+  - type: textarea
+    id: correct_data
+    attributes:
+      label: 正しいと思われる内容
+      placeholder: 例）2026年度は開講なし
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: 公式情報の出典
+      description: 公式シラバス・授業科目一覧など、確認した情報源を記入してください。
+      placeholder: 例）2026年度シラバス、授業科目・単位一覧、学内掲示など
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: 補足
+      description: 年度、確認日、判断に迷う点などがあれば記入してください。
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: 確認事項
+      options:
+        - label: 公式情報を確認しました。
+          required: true
+        - label: 個人情報を含む内容を記載していません。
+          required: true
