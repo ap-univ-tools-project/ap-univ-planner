@@ -11,7 +11,7 @@
 <div class="app-grid">
     <header class="main-header">
         <div class="brand-block">
-            <h1>AP-Univ-Planner <span class="version-label">v1.0</span></h1>
+            <h1>AP-Univ-Planner <span class="version-label">v1.0.0</span></h1>
             <div class="header-meta">
                 <span id="update-date-display">Data: --</span>
                 <span id="header-course-status">所属: 未設定</span>
@@ -150,6 +150,7 @@
                 <li><b>講義の登録</b>: 「講義カタログ」から登録したい講義名をクリックし、ポップアップで登録先の「学期・曜日・時限」を指定して保存してください。</li>
                 <li><b>クイック登録</b>: 時間割の空きコマをクリックし、表示されるリストから講義を選択するだけで、学期・時限を自動入力した状態で素早く登録できます。</li>
                 <li><b>データの保管</b>: 本アプリはブラウザを閉じると内容がリセットされます。作業終了時は「保存(.json)」を行い、次回利用時に「読込」を行ってください。</li>
+                <li><b>特殊枠の扱い</b>: 集中講義や特別研究は、時間割下部の「専用ボックス」を利用して管理してください。</li>
             </ul>
         </div>
         <div class="usage-section">
@@ -158,9 +159,9 @@
                 <li><b>ハイライトの表示</b>: 同一枠内に複数カテゴリの候補がある場合、共通・自専攻・他専攻・関連科目を分割表示します。他専攻の候補はストライプで表示されます。</li>
                 <li><b>重複チェック</b>: 同一時間に複数の講義を登録、または同じ講義を重複して登録すると、右下の「アラート」に警告が表示されます。</li>
                 <li><b>振替単位の計算</b>: 他専攻・他コース科目の単位振替（上限あり）は、修了要件進捗に自動で計算・反映されます。</li>
+                <li><b>履修例の利用</b>: リポジトリに同梱する履修例は、情報システム専攻の履修例1件のみです。利用する場合は<a href="examples/sample_plan.json" download style="color: var(--accent); font-weight: bold;">履修例JSON</a>をダウンロードし、「読込(.json)」から読み込んでください。履修例は、あくまで入力形式や操作感を確認するための例です。<b>推奨履修モデルや修了保証ではありません。</b></li>
                 <li><b>カタログの拡張</b>: 自身の環境に合わせて特定の講義情報を書き換えたい、または不足している講義を追加したい場合は、<a href="templates/diff_template.json" download style="color: var(--accent); font-weight: bold;">テンプレート(JSON)</a>を編集し、「カタログ拡張」から読み込んでください。</li>
                 <li><b>最新情報の確認</b>: 画面右上に表示されている<b>「Data: YYYY-MM-DD」</b>がベースデータの最終更新日です。最新の開講状況は必ず公式情報と照らし合わせてください。</li>
-                <li><b>特殊枠の扱い</b>: 集中講義や特別研究は、時間割下部の「専用ボックス」を利用して管理してください。</li>
             </ul>
         </div>
         <div class="usage-section" style="grid-column: 1 / -1; background: #fff5f5; border: 1px solid #feb2b2; padding: 10px; border-radius: 8px; margin-top: 10px; text-align: center;">
