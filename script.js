@@ -24,6 +24,15 @@ let editingIndex = -1;
 
 const termLabels = {m1z:"M1前期", m1k:"M1後期", m2z:"M2前期", m2k:"M2後期"};
 const majorLabels = {"1":"情報システム専攻", "2":"メディア情報専攻", "3":"システム科学専攻"};
+const APP_SAVE_VERSION = 2;
+const APP_NAME = 'ap-univ-planner';
+const TERM_KEYS = ['m1z', 'm1k', 'm2z', 'm2k'];
+const SPECIAL_SLOT_IDS = ['c-intensive', 'c-research', 'c-other'];
+const VALID_CATEGORY_KEYS = ['core', 'adv', 'rel', 'other-adv', 'other-rel', 'prac', 'res', 'manual'];
+const CATEGORY_PRIORITY = {
+    core: 90, res: 85, prac: 80, adv: 70, rel: 60,
+    'other-adv': 40, 'other-rel': 30, manual: 0
+};
 
 
 function isCourseSelected() {
@@ -59,42 +68,104 @@ function getSelectedMajorId() {
     return document.getElementById('my-course-select')?.value || "";
 }
 
+
+function normalizeMajorId(myMajorId = getSelectedMajorId()) {
+    const value = String(myMajorId || '');
+    return majorLabels[value] ? value : '';
+}
+
+function normalizeCategoryKey(catKey, fallback = 'manual') {
+    const value = String(catKey || fallback || 'manual');
+    if (VALID_CATEGORY_KEYS.includes(value)) return value;
+    return 'manual';
+}
+
 function getBaseCategory(catKey, fallbackType = 'manual') {
-    if (catKey === 'other-adv') return 'adv';
-    if (catKey === 'other-rel') return 'rel';
-    if (catKey && catKey !== 'manual') return catKey;
-    if (fallbackType === 'other-adv') return 'adv';
-    if (fallbackType === 'other-rel') return 'rel';
-    return fallbackType || 'manual';
+    const normalized = normalizeCategoryKey(catKey, fallbackType);
+    if (normalized === 'other-adv') return 'adv';
+    if (normalized === 'other-rel') return 'rel';
+    return normalized;
 }
 
 function isExternalCategory(catKey) {
     return catKey === 'other-adv' || catKey === 'other-rel';
 }
 
+function makeCategoryResolution(catKey, source = 'unknown') {
+    const normalized = normalizeCategoryKey(catKey);
+    const baseType = getBaseCategory(normalized);
+    return {
+        catKey: normalized,
+        baseType,
+        type: baseType,
+        isExternal: isExternalCategory(normalized),
+        label: SYSTEM_CONFIG.CAT_LABELS[normalized] || normalized,
+        source,
+        priority: CATEGORY_PRIORITY[normalized] ?? 0
+    };
+}
+
+/**
+ * 所属専攻を基準に、講義名からカテゴリを一元解決する。
+ * ここを唯一の入口にすることで、カタログ・クイック登録・ハイライト・進捗で
+ * 自専攻/他専攻判定がズレることを防ぐ。
+ */
+function resolveCourseCategory(courseOrName, options = {}) {
+    const courseName = typeof courseOrName === 'string' ? courseOrName : courseOrName?.name;
+    const myMajorId = normalizeMajorId(options.myMajorId);
+    const fallbackType = normalizeCategoryKey(options.fallbackType || courseOrName?.cat || courseOrName?.type || 'manual');
+    const name = String(courseName || '').trim();
+
+    if (!name) return makeCategoryResolution(fallbackType, 'fallback-empty-name');
+
+    if (/^情報科学演習[123]$/.test(name) || name.includes('演習')) {
+        return makeCategoryResolution('prac', 'practice-rule');
+    }
+    if (name === '情報科学特別研究' || name.includes('特別研究')) {
+        return makeCategoryResolution('res', 'research-rule');
+    }
+
+    if (typeof coreCourses !== 'undefined' && coreCourses.some(c => c.name === name)) {
+        return makeCategoryResolution('core', 'coreCourses');
+    }
+
+    if (typeof majorMasters !== 'undefined') {
+        const myMaster = majorMasters[myMajorId];
+        if (myMaster) {
+            if ((myMaster.adv || []).some(c => c.name === name)) return makeCategoryResolution('adv', `majorMasters.${myMajorId}.adv`);
+            if ((myMaster.rel || []).some(c => c.name === name)) return makeCategoryResolution('rel', `majorMasters.${myMajorId}.rel`);
+        }
+
+        for (const mId in majorMasters) {
+            if (mId === myMajorId) continue;
+            if ((majorMasters[mId].adv || []).some(c => c.name === name)) return makeCategoryResolution('other-adv', `majorMasters.${mId}.adv`);
+            if ((majorMasters[mId].rel || []).some(c => c.name === name)) return makeCategoryResolution('other-rel', `majorMasters.${mId}.rel`);
+        }
+    }
+
+    return makeCategoryResolution(fallbackType, 'fallback');
+}
+
 function getCourseResolvedCategory(courseName, fallbackType = 'manual', myMajorId = getSelectedMajorId()) {
-    const dynamicCat = getDynamicCategory(courseName, myMajorId);
-    if (dynamicCat && dynamicCat !== 'manual') return dynamicCat;
-    return fallbackType || 'manual';
+    return resolveCourseCategory(courseName, { fallbackType, myMajorId }).catKey;
 }
 
 function buildSuggestion(course, fallbackType = course?.type || 'manual') {
-    const catKey = getCourseResolvedCategory(course.name, fallbackType);
-    const type = getBaseCategory(catKey, fallbackType);
+    const resolved = resolveCourseCategory(course, { fallbackType, myMajorId: getSelectedMajorId() });
     return {
         ...course,
-        type,
-        catKey,
-        isInternal: !isExternalCategory(catKey)
+        type: resolved.baseType,
+        catKey: resolved.catKey,
+        isInternal: !resolved.isExternal,
+        categorySource: resolved.source,
+        categoryPriority: resolved.priority
     };
 }
 
 function shouldReplaceSuggestion(existing, candidate) {
     if (!existing) return true;
-    // 同名科目が複数専攻に存在する場合は、必ず自専攻扱いを優先する。
-    if (isExternalCategory(existing.catKey) && !isExternalCategory(candidate.catKey)) return true;
-    if (existing.catKey === 'manual' && candidate.catKey !== 'manual') return true;
-    return false;
+    // 同名科目が複数専攻に存在する場合は、所属専攻に近いカテゴリを必ず優先する。
+    return (candidate.categoryPriority || 0) > (existing.categoryPriority || 0);
 }
 
 function addResolvedSuggestion(list, course, fallbackType = course?.type || 'manual') {
@@ -105,6 +176,20 @@ function addResolvedSuggestion(list, course, fallbackType = course?.type || 'man
     } else if (shouldReplaceSuggestion(list[idx], candidate)) {
         list[idx] = { ...list[idx], ...candidate };
     }
+}
+
+function courseExistsInCatalog(courseName) {
+    const name = String(courseName || '').trim();
+    if (!name) return false;
+    if (/^情報科学演習[123]$/.test(name) || name === '情報科学特別研究') return true;
+    if (typeof coreCourses !== 'undefined' && coreCourses.some(c => c.name === name)) return true;
+    if (typeof majorMasters !== 'undefined') {
+        return Object.values(majorMasters).some(master =>
+            (master.adv || []).some(c => c.name === name) ||
+            (master.rel || []).some(c => c.name === name)
+        );
+    }
+    return false;
 }
 
 function getLectureTileHtml(v, myMajorId) {
@@ -393,24 +478,9 @@ function init() {
     refresh(); 
 }
 
+
 function getDynamicCategory(courseName, myMajorId) {
-    if (courseName.includes("演習")) return 'prac';
-    if (courseName === "情報科学特別研究") return 'res';
-    if (typeof coreCourses !== 'undefined' && coreCourses.some(c => c.name === courseName)) return 'core';
-    
-    if (typeof majorMasters !== 'undefined') {
-        const myMaster = majorMasters[myMajorId];
-        if (myMaster) {
-            if (myMaster.adv.some(c => c.name === courseName)) return 'adv';
-            if (myMaster.rel.some(c => c.name === courseName)) return 'rel';
-        }
-        for (const mId in majorMasters) {
-            if (mId === myMajorId) continue;
-            if (majorMasters[mId].adv.some(c => c.name === courseName)) return 'other-adv';
-            if (majorMasters[mId].rel.some(c => c.name === courseName)) return 'other-rel';
-        }
-    }
-    return 'manual';
+    return resolveCourseCategory(courseName, { myMajorId }).catKey;
 }
 
 function getScheduleScore(c) {
@@ -1098,17 +1168,143 @@ function calculateAndNotify() {
     updateHeaderStatus(msgs.length);
 }
 
+
+function createEmptyAppState(activeTab = 'm1z') {
+    const state = { activeTab: TERM_KEYS.includes(activeTab) ? activeTab : 'm1z' };
+    TERM_KEYS.forEach(term => { state[term] = {}; });
+    return state;
+}
+
+function isValidSlotId(slotId) {
+    if (SPECIAL_SLOT_IDS.includes(slotId)) return true;
+    const match = String(slotId || '').match(/^c-(\d+)-(\d+)$/);
+    if (!match) return false;
+    const day = Number(match[1]);
+    const period = Number(match[2]);
+    return Number.isInteger(day) && day >= 1 && day <= 5 && Number.isInteger(period) && period >= 1 && period <= 6;
+}
+
+function normalizeUnitValue(value, fallback = 2) {
+    const unit = Number(value);
+    if (Number.isFinite(unit) && unit > 0 && unit <= 20) return unit;
+    return fallback;
+}
+
+function normalizeLectureEntry(rawLecture, myMajorId, path, warnings) {
+    const lecture = typeof rawLecture === 'string' ? { name: rawLecture } : rawLecture;
+    if (!lecture || typeof lecture !== 'object') {
+        warnings.push(`${path}: 講義データではない項目をスキップしました。`);
+        return null;
+    }
+
+    const name = String(lecture.name || '').trim();
+    if (!name) {
+        warnings.push(`${path}: 講義名が空の項目をスキップしました。`);
+        return null;
+    }
+
+    const resolved = resolveCourseCategory(name, {
+        fallbackType: lecture.cat || lecture.type || 'manual',
+        myMajorId
+    });
+
+    return {
+        name,
+        cat: resolved.catKey,
+        unit: normalizeUnitValue(lecture.unit, 2)
+    };
+}
+
+function validateAndNormalizePlanData(data) {
+    const errors = [];
+    const warnings = [];
+
+    if (!data || typeof data !== 'object') {
+        return { errors: ['JSONのルートがオブジェクトではありません。'], warnings, normalizedState: null, myCourse: '' };
+    }
+    if (!data.state || typeof data.state !== 'object') {
+        return { errors: ['state が見つからない、またはオブジェクトではありません。'], warnings, normalizedState: null, myCourse: '' };
+    }
+
+    const myCourse = normalizeMajorId(data.myCourse) || normalizeMajorId(document.getElementById('my-course-select')?.value);
+    if (data.myCourse && !normalizeMajorId(data.myCourse)) {
+        warnings.push(`myCourse の値「${data.myCourse}」が不正なため、現在の所属設定を使用します。`);
+    }
+
+    const normalizedState = createEmptyAppState(data.state.activeTab);
+    TERM_KEYS.forEach(term => {
+        const termData = data.state[term];
+        if (termData === undefined) {
+            warnings.push(`${term}: 保存データに学期情報がないため空として扱います。`);
+            return;
+        }
+        if (!termData || typeof termData !== 'object' || Array.isArray(termData)) {
+            warnings.push(`${term}: 学期データがオブジェクトではないため空として扱います。`);
+            return;
+        }
+
+        Object.keys(termData).forEach(slotId => {
+            if (!isValidSlotId(slotId)) {
+                warnings.push(`${term}.${slotId}: 不明な枠IDのためスキップしました。`);
+                return;
+            }
+            const rawList = termData[slotId];
+            if (!Array.isArray(rawList)) {
+                warnings.push(`${term}.${slotId}: 講義リストが配列ではないためスキップしました。`);
+                return;
+            }
+            const normalizedList = rawList
+                .map((lecture, index) => normalizeLectureEntry(lecture, myCourse, `${term}.${slotId}[${index}]`, warnings))
+                .filter(Boolean);
+            if (normalizedList.length > 0) normalizedState[term][slotId] = normalizedList;
+        });
+    });
+
+    return { errors, warnings, normalizedState, myCourse };
+}
+
+function collectMissingCatalogCoursesFromState(state, myMajorId) {
+    const missing = [];
+    TERM_KEYS.forEach(term => {
+        Object.values(state[term] || {}).forEach(lectureArray => {
+            (lectureArray || []).forEach(v => {
+                const cat = resolveCourseCategory(v.name, { fallbackType: v.cat || 'manual', myMajorId }).catKey;
+                if (cat === 'manual' && !courseExistsInCatalog(v.name)) missing.push(v.name);
+            });
+        });
+    });
+    return [...new Set(missing)];
+}
+
+function buildValidationAlert(title, warnings = [], extraLines = []) {
+    const lines = [title, ...extraLines];
+    if (warnings.length > 0) {
+        lines.push('', `警告: ${warnings.length}件`);
+        warnings.slice(0, 8).forEach(w => lines.push(`・${w}`));
+        if (warnings.length > 8) lines.push(`・ほか ${warnings.length - 8} 件`);
+        lines.push('詳細はブラウザのコンソールにも出力しています。');
+    }
+    return lines.join('\n');
+}
+
 // 修正点: 保存ファイル名をユーザーが指定できるようにし、デフォルト名に日時を含める
 function exportData() {
     const now = new Date();
     const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
     const defaultFileName = `timetable_plan_${dateStr}.json`;
 
-    // ユーザーにファイル名を確認
     const fileName = prompt("保存するファイル名を入力してください:", defaultFileName);
-    if (fileName === null) return; // キャンセル時
+    if (fileName === null) return;
 
-    const dataStr = JSON.stringify({ state: appState, myCourse: document.getElementById('my-course-select').value }, null, 2);
+    const exportPayload = {
+        app: APP_NAME,
+        version: APP_SAVE_VERSION,
+        exportedAt: now.toISOString(),
+        myCourse: document.getElementById('my-course-select')?.value || '',
+        state: appState
+    };
+
+    const dataStr = JSON.stringify(exportPayload, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     
@@ -1129,41 +1325,170 @@ function importData(event) {
     reader.onload = (e) => {
         try {
             const data = JSON.parse(e.target.result);
-            if (!data.state || !data.state.m1z || !data.state.m2k) {
-                throw new Error("Invalid structure");
+            const result = validateAndNormalizePlanData(data);
+            if (result.errors.length > 0) {
+                throw new Error(result.errors.join('\n'));
             }
-            const myMajorId = data.myCourse || document.getElementById('my-course-select').value;
-            const missingCourses = [];
-            ['m1z','m1k','m2z','m2k'].forEach(t => {
-                Object.values(data.state[t]).forEach(lectureArray => {
-                    lectureArray.forEach(v => {
-                        const cat = getDynamicCategory(v.name, myMajorId);
-                        if (cat === 'manual') missingCourses.push(v.name);
-                    });
-                });
-            });
-            appState = data.state; 
-            if (document.getElementById('my-course-select') && data.myCourse) {
-                const mySelect = document.getElementById('my-course-select');
-                mySelect.value = data.myCourse;
+
+            appState = result.normalizedState;
+            const mySelect = document.getElementById('my-course-select');
+            if (mySelect && result.myCourse) {
+                mySelect.value = result.myCourse;
                 if (mySelect.options[0]?.value === "") mySelect.remove(0);
                 const catalogSelect = document.getElementById('catalog-course-select');
-                if (catalogSelect) catalogSelect.value = data.myCourse;
+                if (catalogSelect) catalogSelect.value = result.myCourse;
             }
+
+            const missingCourses = collectMissingCatalogCoursesFromState(appState, result.myCourse);
             refresh();
+
+            const extraLines = [];
+            if (data.version === undefined) extraLines.push('旧形式の保存データとして読み込みました。');
+            else extraLines.push(`保存データ形式: v${data.version}`);
             if (missingCourses.length > 0) {
-                const uniqueMissing = [...new Set(missingCourses)];
-                alert(`【注意】読み込んだデータのうち、以下の講義は現在のカタログに見つかりませんでした。\n\n・${uniqueMissing.join('\n・')}\n\n先に「カタログ拡張」を行うか、手動でカテゴリを修正してください。`);
-            } else {
-                alert("データを正常にインポートしました。");
+                extraLines.push('', '【注意】現在のカタログに見つからない講義があります。');
+                missingCourses.slice(0, 10).forEach(name => extraLines.push(`・${name}`));
+                if (missingCourses.length > 10) extraLines.push(`・ほか ${missingCourses.length - 10} 件`);
+                extraLines.push('必要に応じて先に「カタログ拡張」を行ってください。');
             }
+
+            if (result.warnings.length > 0) console.warn('Import warnings:', result.warnings);
+            alert(buildValidationAlert('データを正常にインポートしました。', result.warnings, extraLines));
         } catch (err) {
-            alert("エラー: 選択されたファイルは有効なプランデータではありません。");
+            console.error('Plan import failed:', err);
+            alert(`エラー: 選択されたファイルは有効なプランデータではありません。\n\n${err.message || err}`);
         } finally {
             event.target.value = ""; 
         }
     };
     reader.readAsText(file);
+}
+
+function isNonOfferedCourse(course) {
+    return /開講なし|開講されません|非開講/.test(String(course.schedule || ''));
+}
+
+function validateCourseDefinition(rawCourse, path) {
+    const errors = [];
+    const warnings = [];
+    if (!rawCourse || typeof rawCourse !== 'object' || Array.isArray(rawCourse)) {
+        return { errors: [`${path}: 講義データがオブジェクトではありません。`], warnings, course: null };
+    }
+
+    const course = { ...rawCourse };
+    course.name = String(course.name || '').trim();
+    course.schedule = String(course.schedule || '').trim();
+
+    if (!course.name) errors.push(`${path}: name は必須です。`);
+    if (!course.schedule) errors.push(`${path}: schedule は必須です。`);
+
+    if (course.sem !== undefined && !['z', 'k'].includes(course.sem)) {
+        errors.push(`${path}: sem は "z" または "k" を指定してください。`);
+    }
+
+    if (course.day !== undefined) {
+        const day = Number(course.day);
+        if (!Number.isInteger(day) || day < 1 || day > 5) errors.push(`${path}: day は 1〜5 の整数で指定してください。`);
+        else course.day = day;
+    }
+
+    if (course.period !== undefined) {
+        const period = Number(course.period);
+        if (!Number.isInteger(period) || period < 1 || period > 6) errors.push(`${path}: period は 1〜6 の整数で指定してください。`);
+        else course.period = period;
+    }
+
+    const hasDay = course.day !== undefined;
+    const hasPeriod = course.period !== undefined;
+    if (hasDay !== hasPeriod) errors.push(`${path}: day と period は両方指定するか、両方省略してください。`);
+    if ((hasDay || hasPeriod) && !course.sem) errors.push(`${path}: day/period を指定する場合は sem も必要です。`);
+
+    ['isIntensive', 'isOther'].forEach(flag => {
+        if (course[flag] !== undefined && typeof course[flag] !== 'boolean') {
+            errors.push(`${path}: ${flag} は true/false で指定してください。`);
+        }
+    });
+
+    if ((course.isIntensive || course.isOther) && (hasDay || hasPeriod)) {
+        warnings.push(`${path}: 集中/その他フラグと day/period が同時指定されています。読み込みは継続します。`);
+    }
+    if (!course.sem && !course.isIntensive && !course.isOther && !isNonOfferedCourse(course) && !hasDay && !hasPeriod) {
+        warnings.push(`${path}: 学期・曜日時限が未指定です。開講なし/不定期科目として扱われます。`);
+    }
+
+    return { errors, warnings, course: errors.length === 0 ? course : null };
+}
+
+function validateCatalogDiffData(diffData) {
+    const errors = [];
+    const warnings = [];
+    const normalized = { coreCourses: [], majorMasters: {} };
+
+    if (!diffData || typeof diffData !== 'object' || Array.isArray(diffData)) {
+        return { errors: ['JSONのルートがオブジェクトではありません。'], warnings, normalized };
+    }
+    if (!diffData.coreCourses && !diffData.majorMasters) {
+        errors.push('coreCourses または majorMasters の少なくとも一方が必要です。');
+    }
+
+    if (diffData.coreCourses !== undefined) {
+        if (!Array.isArray(diffData.coreCourses)) {
+            errors.push('coreCourses は配列で指定してください。');
+        } else {
+            diffData.coreCourses.forEach((course, index) => {
+                const result = validateCourseDefinition(course, `coreCourses[${index}]`);
+                errors.push(...result.errors);
+                warnings.push(...result.warnings);
+                if (result.course) normalized.coreCourses.push(result.course);
+            });
+        }
+    }
+
+    if (diffData.majorMasters !== undefined) {
+        if (!diffData.majorMasters || typeof diffData.majorMasters !== 'object' || Array.isArray(diffData.majorMasters)) {
+            errors.push('majorMasters はオブジェクトで指定してください。');
+        } else {
+            Object.keys(diffData.majorMasters).forEach(majorId => {
+                if (!majorLabels[majorId]) {
+                    errors.push(`majorMasters.${majorId}: 専攻IDは 1, 2, 3 のいずれかを指定してください。`);
+                    return;
+                }
+                const master = diffData.majorMasters[majorId];
+                if (!master || typeof master !== 'object' || Array.isArray(master)) {
+                    errors.push(`majorMasters.${majorId}: adv/rel を持つオブジェクトを指定してください。`);
+                    return;
+                }
+                normalized.majorMasters[majorId] = { adv: [], rel: [] };
+                ['adv', 'rel'].forEach(cat => {
+                    if (master[cat] === undefined) return;
+                    if (!Array.isArray(master[cat])) {
+                        errors.push(`majorMasters.${majorId}.${cat}: 配列で指定してください。`);
+                        return;
+                    }
+                    master[cat].forEach((course, index) => {
+                        const result = validateCourseDefinition(course, `majorMasters.${majorId}.${cat}[${index}]`);
+                        errors.push(...result.errors);
+                        warnings.push(...result.warnings);
+                        if (result.course) normalized.majorMasters[majorId][cat].push(result.course);
+                    });
+                });
+            });
+        }
+    }
+
+    return { errors, warnings, normalized };
+}
+
+function applyCourseDiff(targetArray, newCourse, reportBucket) {
+    const idx = targetArray.findIndex(c => c.name === newCourse.name);
+    if (idx !== -1) {
+        targetArray[idx] = newCourse;
+        reportBucket.updated.push(newCourse.name);
+    } else {
+        targetArray.push(newCourse);
+        reportBucket.added.push(newCourse.name);
+    }
+    if (isNonOfferedCourse(newCourse)) reportBucket.nonOffered.push(newCourse.name);
 }
 
 function importCatalogDiff(event) {
@@ -1173,34 +1498,48 @@ function importCatalogDiff(event) {
     reader.onload = (e) => {
         try {
             const diffData = JSON.parse(e.target.result);
-            if (!diffData.coreCourses && !diffData.majorMasters) {
-                throw new Error("Invalid catalog structure");
+            const validation = validateCatalogDiffData(diffData);
+            if (validation.errors.length > 0) {
+                throw new Error(validation.errors.join('\n'));
             }
-            if (diffData.coreCourses) {
-                diffData.coreCourses.forEach(newCourse => {
-                    const idx = coreCourses.findIndex(c => c.name === newCourse.name);
-                    if (idx !== -1) coreCourses[idx] = newCourse;
-                    else coreCourses.push(newCourse);
-                });
-            }
-            if (diffData.majorMasters) {
-                for (const majorId in diffData.majorMasters) {
-                    if (!majorMasters[majorId]) majorMasters[majorId] = { adv: [], rel: [] };
-                    ['adv', 'rel'].forEach(cat => {
-                        if (diffData.majorMasters[majorId][cat]) {
-                            diffData.majorMasters[majorId][cat].forEach(newCourse => {
-                                const idx = majorMasters[majorId][cat].findIndex(c => c.name === newCourse.name);
-                                if (idx !== -1) majorMasters[majorId][cat][idx] = newCourse;
-                                else majorMasters[majorId][cat].push(newCourse);
-                            });
-                        }
+
+            const report = {
+                core: { added: [], updated: [], nonOffered: [] },
+                majors: {}
+            };
+
+            validation.normalized.coreCourses.forEach(newCourse => {
+                applyCourseDiff(coreCourses, newCourse, report.core);
+            });
+
+            Object.keys(validation.normalized.majorMasters).forEach(majorId => {
+                if (!majorMasters[majorId]) majorMasters[majorId] = { adv: [], rel: [] };
+                if (!report.majors[majorId]) report.majors[majorId] = { adv: { added: [], updated: [], nonOffered: [] }, rel: { added: [], updated: [], nonOffered: [] } };
+                ['adv', 'rel'].forEach(cat => {
+                    validation.normalized.majorMasters[majorId][cat].forEach(newCourse => {
+                        applyCourseDiff(majorMasters[majorId][cat], newCourse, report.majors[majorId][cat]);
                     });
-                }
-            }
-            alert("カタログ情報を更新しました。");
+                });
+            });
+
+            if (validation.warnings.length > 0) console.warn('Catalog diff warnings:', validation.warnings);
+            console.info('Catalog diff applied:', report);
+
+            const summary = [];
+            summary.push(`共通: 追加${report.core.added.length} / 更新${report.core.updated.length}`);
+            Object.keys(report.majors).forEach(majorId => {
+                const bucket = report.majors[majorId];
+                summary.push(`${majorLabels[majorId]} 専攻: 追加${bucket.adv.added.length} / 更新${bucket.adv.updated.length}`);
+                summary.push(`${majorLabels[majorId]} 関連: 追加${bucket.rel.added.length} / 更新${bucket.rel.updated.length}`);
+            });
+            const nonOfferedCount = report.core.nonOffered.length + Object.values(report.majors).reduce((sum, bucket) => sum + bucket.adv.nonOffered.length + bucket.rel.nonOffered.length, 0);
+            if (nonOfferedCount > 0) summary.push(`非開講扱い: ${nonOfferedCount}件`);
+
+            alert(buildValidationAlert('カタログ情報を更新しました。', validation.warnings, summary));
             refresh();
         } catch (err) {
-            alert("エラー: 選択されたファイルは有効なカタログ拡張データではありません。");
+            console.error('Catalog diff import failed:', err);
+            alert(`エラー: 選択されたファイルは有効なカタログ拡張データではありません。\n\n${err.message || err}`);
         }
         event.target.value = "";
     };
