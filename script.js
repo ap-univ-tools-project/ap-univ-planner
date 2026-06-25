@@ -20,6 +20,7 @@ const SYSTEM_CONFIG = {
 let appState = { activeTab: 'm1z', m1z: {}, m1k: {}, m2z: {}, m2k: {} };
 let activeId = null;
 let pendingCourse = null;
+let pendingRegisteredCourse = null;
 let editingIndex = -1;
 
 const termLabels = {m1z:"M1前期", m1k:"M1後期", m2z:"M2前期", m2k:"M2後期"};
@@ -596,34 +597,7 @@ function createDefinedItem(c, type, container, registeredNames) {
     div.onclick = () => {
         if (!ensureCourseSelected("講義登録・変更")) return;
         if (isSelected) {
-            let locations = [];
-            ['m1z','m1k','m2z','m2k'].forEach(t => {
-                Object.keys(appState[t]).forEach(id => {
-                    if (appState[t][id].some(v => v.name === c.name)) {
-                        let locStr = termLabels[t];
-                        if (id.match(/c-\d-\d/)) {
-                            const parts = id.split('-');
-                            locStr += ` ${['','月','火','水','木','金'][parts[1]]}曜${parts[2]}限`;
-                        } else {
-                            const specialLabel = id.replace('c-','');
-                            const labelMap = {intensive: "集中", research: "特別研究", other: "その他"};
-                            locStr += ` (${labelMap[specialLabel] || specialLabel})`;
-                        }
-                        locations.push(locStr);
-                    }
-                });
-            });
-
-            const action = prompt(`「${c.name}」は以下に登録されています：\n${locations.join('\n')}\n\n操作を選択してください：\n1: そのままにする\n2: 別の場所に移動する\n3: 削除する`, "1");
-            
-            if (action === "2") {
-                openCourseSelector(c, true);
-            } else if (action === "3") {
-                if (confirm(`「${c.name}」を削除しますか？`)) {
-                    deleteFromAll(c.name);
-                    refresh();
-                }
-            }
+            openRegisteredCourseDialog(c);
             return;
         }
         openCourseSelector(c, false);
@@ -637,6 +611,148 @@ function deleteFromAll(courseName) {
             appState[t][id] = appState[t][id].filter(v => v.name !== courseName);
         });
     });
+}
+
+function getSlotLabel(id) {
+    const match = String(id || '').match(/^c-(\d)-(\d)$/);
+    if (match) {
+        return `${['','月','火','水','木','金'][match[1]]}曜${match[2]}限`;
+    }
+    const labelMap = {
+        'c-intensive': '集中講義',
+        'c-research': '特別研究',
+        'c-other': 'その他枠'
+    };
+    return labelMap[id] || String(id || '不明な枠');
+}
+
+function getEditorLabelForSlot(id) {
+    const match = String(id || '').match(/^c-(\d)-(\d)$/);
+    if (match) {
+        return `${['','月','火','水','木','金'][match[1]]}曜 ${match[2]}限`;
+    }
+    return getSlotLabel(id);
+}
+
+function findCourseRegistrations(courseName) {
+    const locations = [];
+    TERM_KEYS.forEach(term => {
+        const termData = appState[term] || {};
+        Object.keys(termData).forEach(id => {
+            const arr = Array.isArray(termData[id]) ? termData[id] : [];
+            arr.forEach((lecture, index) => {
+                if (lecture?.name === courseName) {
+                    locations.push({
+                        term,
+                        id,
+                        index,
+                        lecture,
+                        termLabel: termLabels[term] || term,
+                        slotLabel: getSlotLabel(id),
+                        label: `${termLabels[term] || term} ${getSlotLabel(id)}`,
+                        isSpecial: SPECIAL_SLOT_IDS.includes(id)
+                    });
+                }
+            });
+        });
+    });
+    return locations;
+}
+
+function openRegisteredCourseDialog(course) {
+    if (!ensureCourseSelected('登録済み講義の操作')) return;
+    const dialog = document.getElementById('registered-course-dialog');
+    if (!dialog) return;
+
+    const locations = findCourseRegistrations(course.name);
+    pendingRegisteredCourse = { ...course, locations };
+
+    const nameEl = document.getElementById('registered-course-name');
+    if (nameEl) nameEl.textContent = course.name;
+
+    const locationList = document.getElementById('registered-course-locations');
+    if (locationList) {
+        locationList.innerHTML = '';
+        if (locations.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'registered-course-empty';
+            empty.textContent = '現在の時間割には登録場所が見つかりませんでした。表示を更新してください。';
+            locationList.appendChild(empty);
+        } else {
+            locations.forEach((loc, idx) => {
+                const row = document.createElement('button');
+                row.type = 'button';
+                row.className = `registered-location-row ${idx === 0 ? 'primary-location' : ''}`;
+                row.onclick = () => openRegisteredCourseLocation(idx);
+
+                const main = document.createElement('span');
+                main.className = 'registered-location-main';
+                main.textContent = loc.label;
+                row.appendChild(main);
+
+                const meta = document.createElement('span');
+                meta.className = 'registered-location-meta';
+                meta.textContent = loc.isSpecial ? '特殊枠' : '通常枠';
+                row.appendChild(meta);
+
+                locationList.appendChild(row);
+            });
+        }
+    }
+
+    const openBtn = document.getElementById('registered-open-location-btn');
+    if (openBtn) openBtn.disabled = locations.length === 0;
+    const moveBtn = document.getElementById('registered-move-btn');
+    if (moveBtn) moveBtn.disabled = locations.length === 0;
+    const deleteBtn = document.getElementById('registered-delete-btn');
+    if (deleteBtn) deleteBtn.disabled = locations.length === 0;
+
+    closeEditor();
+    dialog.showModal();
+}
+
+function closeRegisteredCourseDialog() {
+    const dialog = document.getElementById('registered-course-dialog');
+    if (dialog?.open) dialog.close();
+}
+
+function openRegisteredCourseLocation(locationIndex = 0) {
+    const courseState = pendingRegisteredCourse;
+    const loc = courseState?.locations?.[locationIndex] || courseState?.locations?.[0];
+    if (!loc) return;
+
+    closeRegisteredCourseDialog();
+    if (appState.activeTab !== loc.term) {
+        switchTab(loc.term);
+    } else {
+        closeEditor();
+    }
+
+    openEditor(loc.id, getEditorLabelForSlot(loc.id));
+    const target = document.getElementById(loc.id);
+    if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        target.classList.add('registered-location-flash');
+        window.setTimeout(() => target.classList.remove('registered-location-flash'), 1600);
+    }
+}
+
+function moveRegisteredCourseFromDialog() {
+    const course = pendingRegisteredCourse;
+    if (!course) return;
+    closeRegisteredCourseDialog();
+    openCourseSelector({ name: course.name, ...course }, true);
+}
+
+function deleteRegisteredCourseFromDialog() {
+    const course = pendingRegisteredCourse;
+    if (!course) return;
+    const count = course.locations?.length || 0;
+    const locationText = count > 0 ? `\n\n対象: ${count}件の登録場所すべて` : '';
+    if (!confirm(`「${course.name}」を時間割から削除しますか？${locationText}`)) return;
+    deleteFromAll(course.name);
+    closeRegisteredCourseDialog();
+    refresh();
 }
 
 function openCourseSelector(c, isMoveMode = false) {

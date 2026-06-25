@@ -11,7 +11,7 @@
 <div class="app-grid">
     <header class="main-header">
         <div class="brand-block">
-            <h1>AP-Univ-Planner <span class="version-label">v1.0.0</span></h1>
+            <h1>AP-Univ-Planner <span class="version-label">v2.0.0</span></h1>
             <div class="header-meta">
                 <span id="update-date-display">Data: --</span>
                 <span id="header-course-status">所属: 未設定</span>
@@ -217,6 +217,33 @@
     <div class="dialog-actions">
         <button id="btn-confirm-add" class="btn btn-primary" onclick="confirmSelector()">登録</button>
         <button class="btn btn-ghost" onclick="document.getElementById('selector-dialog').close()">キャンセル</button>
+    </div>
+</dialog>
+
+<dialog id="registered-course-dialog" class="registered-course-dialog">
+    <div class="registered-dialog-header">
+        <div>
+            <span class="dialog-kicker">REGISTERED COURSE</span>
+            <h3 class="dialog-title">登録済み講義</h3>
+        </div>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="closeRegisteredCourseDialog()">閉じる</button>
+    </div>
+
+    <p id="registered-course-name" class="dialog-course-name"></p>
+
+    <div class="registered-dialog-section">
+        <div class="registered-dialog-label">登録場所</div>
+        <div id="registered-course-locations" class="registered-location-list"></div>
+    </div>
+
+    <div class="registered-dialog-note">
+        「登録場所を開く」は最初の登録場所を開きます。重複している場合、移動・削除は同名講義の登録をまとめて対象にします。
+    </div>
+
+    <div class="registered-dialog-actions">
+        <button id="registered-open-location-btn" class="btn btn-secondary" type="button" onclick="openRegisteredCourseLocation()">登録場所を開く</button>
+        <button id="registered-move-btn" class="btn btn-primary" type="button" onclick="moveRegisteredCourseFromDialog()">移動する</button>
+        <button id="registered-delete-btn" class="btn btn-danger" type="button" onclick="deleteRegisteredCourseFromDialog()">削除する</button>
     </div>
 </dialog>
 

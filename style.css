@@ -1870,3 +1870,134 @@ main {
     font-size: 0.78rem;
 }
 
+
+/* 登録済み講義専用ダイアログ */
+.registered-course-dialog {
+    width: 420px;
+    max-width: calc(100vw - 48px);
+    padding: 18px;
+}
+
+.registered-dialog-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #e6edf3;
+}
+
+.dialog-kicker {
+    display: block;
+    margin-bottom: 2px;
+    color: #94a3b8;
+    font-size: 0.58rem;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+}
+
+.registered-dialog-section {
+    margin-top: 12px;
+}
+
+.registered-dialog-label {
+    margin-bottom: 6px;
+    color: #64748b;
+    font-size: 0.68rem;
+    font-weight: 900;
+}
+
+.registered-location-list {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    max-height: 190px;
+    overflow-y: auto;
+}
+
+.registered-location-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 10px;
+    border: 1px solid #dfe7ef;
+    border-left: 4px solid var(--accent);
+    border-radius: 10px;
+    background: #fbfdff;
+    color: var(--primary);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+
+.registered-location-row:hover {
+    background: #f0f7ff;
+    border-color: #bdddf5;
+    transform: translateY(-1px);
+}
+
+.registered-location-main {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.76rem;
+    font-weight: 900;
+}
+
+.registered-location-meta {
+    flex: 0 0 auto;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: #edf2f7;
+    color: #64748b;
+    font-size: 0.58rem;
+    font-weight: 800;
+}
+
+.registered-course-empty {
+    padding: 12px;
+    border: 1px dashed #d7e1ea;
+    border-radius: 10px;
+    background: #f8fafc;
+    color: #94a3b8;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-align: center;
+}
+
+.registered-dialog-note {
+    margin-top: 10px;
+    padding: 9px 10px;
+    border-radius: 10px;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 0.67rem;
+    line-height: 1.55;
+}
+
+.registered-dialog-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.registered-dialog-actions .btn {
+    min-height: 38px;
+    padding-inline: 8px;
+    white-space: nowrap;
+}
+
+.registered-location-flash {
+    animation: registered-location-flash 1.6s ease-out;
+}
+
+@keyframes registered-location-flash {
+    0% { box-shadow: 0 0 0 0 rgba(52, 152, 219, 0.7); }
+    45% { box-shadow: 0 0 0 8px rgba(52, 152, 219, 0.18); }
+    100% { box-shadow: 0 0 0 0 rgba(52, 152, 219, 0); }
+}
