@@ -1,95 +1,96 @@
 name: 不具合報告
-about: AP-Univ-Planner の表示崩れ・計算ミス・操作不能などを報告する
-labels: [bug]
-title: "[Bug]: "
+description: AP-Univ-Planner の表示崩れ・計算ミス・操作不能などを報告する
+title: '[Bug]: '
+labels:
+- bug
 body:
-  - type: markdown
-    attributes:
-      value: |
-        不具合報告ありがとうございます。
-        可能な範囲で、再現手順・期待される挙動・実際の挙動を記入してください。
-        個人情報や学籍番号などは記載しないでください。
-  - type: textarea
-    id: summary
-    attributes:
-      label: 概要
-      description: 何が起きたかを簡潔に記入してください。
-      placeholder: 例）集中講義枠のハイライトが正しく表示されない
-    validations:
+- type: markdown
+  attributes:
+    value: '不具合報告ありがとうございます。
+
+      可能な範囲で、再現手順・期待される挙動・実際の挙動を記入してください。
+
+      個人情報や学籍番号などは記載しないでください。
+
+      '
+- type: textarea
+  id: summary
+  attributes:
+    label: 概要
+    description: 何が起きたかを簡潔に記入してください。
+    placeholder: 例）集中講義枠のハイライトが正しく表示されない
+  validations:
+    required: true
+- type: dropdown
+  id: area
+  attributes:
+    label: 関連する機能
+    multiple: true
+    options:
+    - 所属コース設定
+    - 講義カタログ
+    - 時間割登録
+    - クイック登録
+    - 特殊枠（集中講義・特別研究・その他枠）
+    - 空きコマハイライト
+    - 修了要件・単位計算
+    - 保存・読込
+    - カタログ拡張JSON
+    - レイアウト・表示
+    - その他
+  validations:
+    required: true
+- type: textarea
+  id: steps
+  attributes:
+    label: 再現手順
+    description: 同じ状態を再現するための操作を順番に書いてください。
+    value: "1. \n2. \n3. \n"
+  validations:
+    required: true
+- type: textarea
+  id: expected
+  attributes:
+    label: 期待される挙動
+    description: 本来どう表示・動作してほしかったかを書いてください。
+  validations:
+    required: true
+- type: textarea
+  id: actual
+  attributes:
+    label: 実際の挙動
+    description: 実際に表示された内容、エラーメッセージなどを書いてください。
+  validations:
+    required: true
+- type: dropdown
+  id: major
+  attributes:
+    label: 所属コース設定
+    options:
+    - 未選択
+    - 情報システム専攻
+    - メディア情報専攻
+    - システム科学専攻
+    - 不明・関係なし
+  validations:
+    required: true
+- type: input
+  id: browser
+  attributes:
+    label: 使用環境
+    description: OS、ブラウザ、ブラウザのバージョンが分かれば記入してください。
+    placeholder: 例）Windows 11 / Chrome 126
+- type: textarea
+  id: screenshots
+  attributes:
+    label: スクリーンショット・補足資料
+    description: 可能であればスクリーンショットを添付してください。保存JSONを添付する場合は個人情報が含まれていないか確認してください。
+- type: checkboxes
+  id: confirmation
+  attributes:
+    label: 確認事項
+    options:
+    - label: ページを再読み込みしても同じ問題が起きることを確認しました。
+      required: false
+    - label: 個人情報を含む内容を記載していません。
       required: true
-  - type: dropdown
-    id: area
-    attributes:
-      label: 関連する機能
-      multiple: true
-      options:
-        - 所属コース設定
-        - 講義カタログ
-        - 時間割登録
-        - クイック登録
-        - 特殊枠（集中講義・特別研究・その他枠）
-        - 空きコマハイライト
-        - 修了要件・単位計算
-        - 保存・読込
-        - カタログ拡張JSON
-        - レイアウト・表示
-        - その他
-    validations:
-      required: true
-  - type: textarea
-    id: steps
-    attributes:
-      label: 再現手順
-      description: 同じ状態を再現するための操作を順番に書いてください。
-      value: |
-        1. 
-        2. 
-        3. 
-    validations:
-      required: true
-  - type: textarea
-    id: expected
-    attributes:
-      label: 期待される挙動
-      description: 本来どう表示・動作してほしかったかを書いてください。
-    validations:
-      required: true
-  - type: textarea
-    id: actual
-    attributes:
-      label: 実際の挙動
-      description: 実際に表示された内容、エラーメッセージなどを書いてください。
-    validations:
-      required: true
-  - type: dropdown
-    id: major
-    attributes:
-      label: 所属コース設定
-      options:
-        - 未選択
-        - 情報システム専攻
-        - メディア情報専攻
-        - システム科学専攻
-        - 不明・関係なし
-    validations:
-      required: true
-  - type: input
-    id: browser
-    attributes:
-      label: 使用環境
-      description: OS、ブラウザ、ブラウザのバージョンが分かれば記入してください。
-      placeholder: 例）Windows 11 / Chrome 126
-  - type: textarea
-    id: screenshots
-    attributes:
-      label: スクリーンショット・補足資料
-      description: 可能であればスクリーンショットを添付してください。保存JSONを添付する場合は個人情報が含まれていないか確認してください。
-  - type: checkboxes
-    id: confirmation
-    attributes:
-      label: 確認事項
-      options:
-        - label: ページを再読み込みしても同じ問題が起きることを確認しました。
-          required: false
-        - label: 個人情報を含む内容を記載していません。
-          required: true
