@@ -25,6 +25,7 @@ let editingIndex = -1;
 
 const termLabels = {m1z:"M1前期", m1k:"M1後期", m2z:"M2前期", m2k:"M2後期"};
 const majorLabels = {"1":"情報システム専攻", "2":"メディア情報専攻", "3":"システム科学専攻"};
+const APP_VERSION = '1.1.0';
 const APP_SAVE_VERSION = 2;
 const APP_NAME = 'ap-univ-planner';
 const TERM_KEYS = ['m1z', 'm1k', 'm2z', 'm2k'];
@@ -459,6 +460,9 @@ window.onload = async () => {
 };
 
 function init() {
+    const versionDisplay = document.getElementById('app-version-display');
+    if (versionDisplay) versionDisplay.innerText = `v${APP_VERSION}`;
+
     const dateDisplay = document.getElementById('update-date-display');
     if (dateDisplay && typeof lastUpdated !== 'undefined') {
         dateDisplay.innerText = `Data: ${lastUpdated}`;
@@ -1414,6 +1418,7 @@ function exportData() {
 
     const exportPayload = {
         app: APP_NAME,
+        appVersion: APP_VERSION,
         version: APP_SAVE_VERSION,
         exportedAt: now.toISOString(),
         myCourse: document.getElementById('my-course-select')?.value || '',
